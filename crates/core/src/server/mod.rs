@@ -9,8 +9,13 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{RequestExt, Router};
 use log::*;
+use opentelemetry::trace::TracerProvider;
 use std::path::PathBuf;
 use std::sync::Arc;
+use telemetry_rust::{
+  middleware::axum::OtelAxumLayer,
+  // shutdown_tracer_provider,
+};
 use tokio::signal;
 use tokio::task::JoinSet;
 use tokio_rustls::{
@@ -161,11 +166,32 @@ impl Server {
       .with_default(filter::LevelFilter::OFF)
       .with_target(crate::logging::EVENT_TARGET, crate::logging::LEVEL);
 
+    // Open Telemetry
+    //
+    // TODO: shutdown.
+    let fallback_service_name = std::env!("CARGO_PKG_NAME");
+    let fallback_service_version = std::env!("CARGO_PKG_VERSION");
+    let otel_rsrc =
+      telemetry_rust::DetectResource::new(fallback_service_name, fallback_service_version).build();
+
+    let tracer_provider =
+      telemetry_rust::otlp::init_tracer(otel_rsrc, telemetry_rust::otlp::identity)
+        .expect("TracerProvider setup");
+
+    opentelemetry::global::set_tracer_provider(tracer_provider.clone());
+    opentelemetry::global::set_text_map_propagator(
+      telemetry_rust::propagation::TextMapSplitPropagator::from_env()
+        .expect("TextMapPropagator setup"),
+    );
+
     tracing_subscriber::Registry::default()
       .with(filter_layer)
       .with(logging::SqliteLogLayer::new(
         &state,
         /* log-to-stdout= */ opts.log_responses,
+      ))
+      .with(telemetry_rust::OpenTelemetryLayer::new(
+        tracer_provider.tracer(env!("CARGO_PKG_NAME")),
       ))
       .init();
 
@@ -403,6 +429,8 @@ impl Server {
     router: Router<AppState>,
   ) -> Router<()> {
     return router
+      .route("/otel", get(route_otel))
+      .layer(OtelAxumLayer::new(axum::extract::MatchedPath::as_str).inject_context(true))
       .layer(CookieManagerLayer::new())
       .layer(build_cors(opts))
       .layer(
@@ -417,6 +445,13 @@ impl Server {
       .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
       .with_state(state.clone());
   }
+}
+
+#[tracing::instrument]
+async fn route_otel() -> impl axum::response::IntoResponse {
+  let trace_id = telemetry_rust::tracing_opentelemetry_instrumentation_sdk::find_current_trace_id();
+  dbg!(&trace_id);
+  axum::Json(serde_json::json!({ "trace-id": trace_id }))
 }
 
 fn has_indepenedent_admin_router(opts: &ServerOptions) -> bool {
