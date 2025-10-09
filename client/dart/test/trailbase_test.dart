@@ -275,19 +275,29 @@ Future<void> main() async {
       final api = client.records('simple_strict_table');
 
       final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final sortedMessages = [
-        'dart client test 0: =?&${now}',
-        'dart client test 1: =?&${now}',
-        'dart client test 2: =?&${now}',
-      ];
+      final rng = Random();
       // NOTE: we're randomizing the lexicographical order of the messages to
       // make sure we're not just sorting by insertion order later on in the
       // test.
-      final messages = [...sortedMessages]..shuffle(Random());
+      final messages = [
+        DateTime.fromMillisecondsSinceEpoch(rng.nextInt(now) * 1000)
+            .toIso8601String(),
+        DateTime.fromMillisecondsSinceEpoch(rng.nextInt(now) * 1000)
+            .toIso8601String(),
+        DateTime.fromMillisecondsSinceEpoch(rng.nextInt(now) * 1000)
+            .toIso8601String(),
+        // 'dart client test 0: =?&${now}',
+        // 'dart client test 1: =?&${now}',
+        // 'dart client test 2: =?&${now}',
+      ];
+      final sortedMessages = [...messages]..sort();
 
       final ids = [];
       for (final msg in messages) {
-        ids.add(await api.create({'text_not_null': msg}));
+        ids.add(await api.create({
+          'text_not_null': msg,
+          'text_default': 'foo ${now}',
+        }));
       }
 
       {
@@ -311,10 +321,7 @@ Future<void> main() async {
         final recordsAsc = (await api.list(
           order: ['+text_not_null'],
           filters: [
-            Filter(
-                column: 'text_not_null',
-                op: CompareOp.like,
-                value: '% =?&${now}')
+            Filter(column: 'text_default', op: CompareOp.like, value: '%${now}')
           ],
         ))
             .records;
@@ -324,8 +331,7 @@ Future<void> main() async {
         final recordsDesc = (await api.list(
           order: ['-text_not_null'],
           filters: [
-            Filter(
-                column: 'text_not_null', op: CompareOp.like, value: '%${now}')
+            Filter(column: 'text_default', op: CompareOp.like, value: '%${now}')
           ],
         ))
             .records;
@@ -338,8 +344,7 @@ Future<void> main() async {
           pagination: Pagination(limit: 1),
           order: ['-text_not_null'],
           filters: [
-            Filter(
-                column: 'text_not_null', op: CompareOp.like, value: '%${now}')
+            Filter(column: 'text_default', op: CompareOp.like, value: '%${now}')
           ],
           count: true,
         ));
