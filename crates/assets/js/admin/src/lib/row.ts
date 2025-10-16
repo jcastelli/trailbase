@@ -4,7 +4,7 @@ import {
   findPrimaryKeyColumnIndex,
   prettyFormatQualifiedName,
 } from "@/lib/schema";
-import { preProcessRow } from "@/lib/convert";
+// import { preProcessRow } from "@/lib/convert";
 import type { FormRow2 } from "@/lib/convert";
 
 import type { Table } from "@bindings/Table";

@@ -13,10 +13,10 @@ import {
   isReal,
 } from "@/lib/schema";
 
+import type { Blob } from "@bindings/Blob";
 import type { Column } from "@bindings/Column";
 import type { ColumnDataType } from "@bindings/ColumnDataType";
 import type { SqlValue } from "@bindings/SqlValue";
-import type { Blob } from "@bindings/Blob";
 import type { Table } from "@bindings/Table";
 
 // NOTE: We use a simpler type here over `Object`, `JsonValue` or other recursive
@@ -34,10 +34,41 @@ export type FormRow = { [key: string]: RowValue };
 export type RowData = RowValue[];
 
 // A record representation of a single row keyed by column name.
-export type FormRow2 = { [key: string]: (SqlValue | null) };
+export type FormRow2 = { [key: string]: SqlValue | undefined };
 
 // An array representation of a single row.
 export type Row2Data = SqlValue[];
+
+export function castToInteger(value: SqlValue): bigint {
+  if (typeof value === "object" && "Integer" in value) {
+    return value.Integer;
+  }
+  throw Error(`Expected integer, got: ${value}`);
+}
+
+export function sqlValueToString(value: SqlValue): string {
+  if (value === null || value === "Null") {
+    return "NULL";
+  }
+
+  if ("Integer" in value) {
+    return value.Integer.toString();
+  }
+
+  if ("Real" in value) {
+    return value.Real.toString();
+  }
+
+  if ("Blob" in value) {
+    const blob: Blob = value.Blob;
+    if ("Base64UrlSafe" in blob) {
+      return blob.Base64UrlSafe;
+    }
+    throw Error("Expected Base64UrlSafe");
+  }
+
+  return value.Text;
+}
 
 // TODO: Remove when everything is converted to Row2 format.
 // export function formRow2ToFormRow(
@@ -107,6 +138,7 @@ export function literalDefault(
   return undefined;
 }
 
+// NOTE: this is also validation.
 export function preProcessInsertValue(
   col: Column,
   value: RowValue | undefined,
@@ -202,6 +234,8 @@ export function preProcessInsertValue(
 
 /// Updates and inserts are different with inserts not being able to tap into
 /// default values.
+///
+/// NOTE: this is also validation.
 export function preProcessUpdateValue(
   col: Column,
   value: RowValue | undefined,
@@ -321,7 +355,7 @@ export function buildDefaultRow(schema: Table): FormRow2 {
     /// If there's no default and the column is nullable we default to null.
     if (defaultValue !== undefined) {
       // If there is a default, we leave the form field empty and show the default as a textinput placeholder.
-      obj[col.name] = null;
+      obj[col.name] = undefined;
       continue;
     } else if (nullable) {
       obj[col.name] = "Null";
@@ -333,7 +367,11 @@ export function buildDefaultRow(schema: Table): FormRow2 {
     // ...we fall back to generic defaults. We may be wrong based on CHECK constraints.
     if (type === "Blob") {
       if (foreignKey !== undefined) {
-        obj[col.name] = { Blob: { Base64UrlSafe: `<${foreignKey.foreign_table.toUpperCase()}_ID>` } };
+        obj[col.name] = {
+          Blob: {
+            Base64UrlSafe: `<${foreignKey.foreign_table.toUpperCase()}_ID>`,
+          },
+        };
       } else {
         obj[col.name] = { Blob: { Base64UrlSafe: "" } };
       }

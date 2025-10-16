@@ -124,13 +124,13 @@ function renderCell2(
   if ("Blob" in value) {
     const blob: Blob = value.Blob;
     if ("Base64UrlSafe" in blob) {
+      // TODO: Do we want this? We also discussed showing hex for use in SQL editor as X'AABB'.
+      if (cell.isUUID) {
+        return urlSafeBase64ToUuid(blob.Base64UrlSafe);
+      }
       return blob.Base64UrlSafe;
     }
     throw Error("Expected Base64UrlSafe");
-  }
-
-  if (cell.isUUID) {
-    return urlSafeBase64ToUuid(value.Text);
   }
 
   const imageMime = (f: FileUpload) => {
@@ -715,32 +715,32 @@ function RowDataTable(props: {
                   onRowClick={
                     mutable()
                       ? (_idx: number, row: Row2Data) => {
-                        setEditRow(rowDataToRow(columns(), row));
-                      }
+                          setEditRow(rowDataToRow(columns(), row));
+                        }
                       : undefined
                   }
                   onRowSelection={
                     mutable()
                       ? (rows: Row<Row2Data>[], value: boolean) => {
-                        const newSelection = new Map<string, SqlValue>(
-                          selectedRows(),
-                        );
+                          const newSelection = new Map<string, SqlValue>(
+                            selectedRows(),
+                          );
 
-                        for (const row of rows) {
-                          const pkValue: SqlValue =
-                            row.original[pkColumnIndex()];
-                          const key = hashSqlValue(pkValue);
+                          for (const row of rows) {
+                            const pkValue: SqlValue =
+                              row.original[pkColumnIndex()];
+                            const key = hashSqlValue(pkValue);
 
-                          console.log("kYE", key);
+                            console.log("kYE", key);
 
-                          if (value) {
-                            newSelection.set(key, pkValue);
-                          } else {
-                            newSelection.delete(key);
+                            if (value) {
+                              newSelection.set(key, pkValue);
+                            } else {
+                              newSelection.delete(key);
+                            }
                           }
+                          setSelectedRows(newSelection);
                         }
-                        setSelectedRows(newSelection);
-                      }
                       : undefined
                   }
                 />
@@ -818,7 +818,7 @@ export function TablePane(props: {
       const tbl = table();
       return (
         (idx.name.database_schema ?? "main") ==
-        (tbl.name.database_schema ?? "main") &&
+          (tbl.name.database_schema ?? "main") &&
         idx.table_name === tbl.name.name
       );
     });
@@ -1004,24 +1004,24 @@ export function TablePane(props: {
                           hidden()
                             ? undefined
                             : (_idx: number, index: TableIndex) => {
-                              setEditIndex(index);
-                            }
+                                setEditIndex(index);
+                              }
                         }
                         onRowSelection={
                           hidden()
                             ? undefined
                             : (rows: Row<TableIndex>[], value: boolean) => {
-                              const newSelection = new Set(selectedIndexes());
-                              for (const row of rows) {
-                                const name = row.original.name.name;
-                                if (value) {
-                                  newSelection.add(name);
-                                } else {
-                                  newSelection.delete(name);
+                                const newSelection = new Set(selectedIndexes());
+                                for (const row of rows) {
+                                  const name = row.original.name.name;
+                                  if (value) {
+                                    newSelection.add(name);
+                                  } else {
+                                    newSelection.delete(name);
+                                  }
                                 }
+                                setSelectedIndexes(newSelection);
                               }
-                              setSelectedIndexes(newSelection);
-                            }
                         }
                       />
                     </div>
