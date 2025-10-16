@@ -10,18 +10,18 @@ use trailbase_schema::{QualifiedName, QualifiedNameEscaped};
 use ts_rs::TS;
 
 use crate::admin::AdminError as Error;
+use crate::admin::sql_value::SqlValue;
 use crate::app_state::AppState;
 use crate::records::write_queries::run_delete_query;
 
-#[derive(Debug, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct DeleteRowRequest {
   primary_key_column: String,
 
   /// The primary key (of any type since we're in row instead of RecordApi land) of rows that
   /// shall be deleted.
-  #[ts(type = "Object")]
-  value: serde_json::Value,
+  value: SqlValue,
 }
 
 pub async fn delete_row_handler(
@@ -43,7 +43,7 @@ pub(crate) async fn delete_row(
   state: &AppState,
   table_name: &QualifiedName,
   pk_col: &str,
-  value: serde_json::Value,
+  pk_value: SqlValue,
 ) -> Result<(), Error> {
   let Some(schema_metadata) = state.schema_metadata().get_table(table_name) else {
     return Err(Error::Precondition(format!(
@@ -63,7 +63,7 @@ pub(crate) async fn delete_row(
     state,
     &QualifiedNameEscaped::from(&schema_metadata.schema.name),
     pk_col,
-    flat_json_to_value(column.data_type, value, true)?,
+    pk_value.try_into()?,
     schema_metadata.json_metadata.has_file_columns(),
   )
   .await?;
@@ -79,8 +79,7 @@ pub struct DeleteRowsRequest {
 
   /// A list of primary keys (of any type since we're in row instead of RecordApi land)
   /// of rows that shall be deleted.
-  #[ts(type = "Object[]")]
-  values: Vec<serde_json::Value>,
+  values: Vec<SqlValue>,
 }
 
 pub async fn delete_rows_handler(
@@ -99,6 +98,7 @@ pub async fn delete_rows_handler(
   } = request;
 
   for value in values {
+    // NOTE: Abort on first error.
     delete_row(&state, &table_name, &primary_key_column, value).await?;
   }
 
@@ -116,6 +116,7 @@ mod tests {
   use crate::admin::rows::insert_row::insert_row;
   use crate::admin::rows::list_rows::list_rows_handler;
   use crate::admin::rows::update_row::{UpdateRowRequest, update_row_handler};
+  use crate::admin::sql_value::Blob;
   use crate::admin::table::{CreateTableRequest, create_table_handler};
   use crate::app_state::*;
   use crate::records::test_utils::json_row_from_value;
@@ -258,7 +259,7 @@ mod tests {
         Path(table_name.clone()),
         Json(DeleteRowRequest {
           primary_key_column: pk_col.clone(),
-          value: serde_json::Value::String(uuid_to_b64(&id)),
+          value: SqlValue::Blob(Blob::Base64UrlSafe(uuid_to_b64(&id))),
         }),
       )
     };

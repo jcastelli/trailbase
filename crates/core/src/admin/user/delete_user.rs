@@ -10,6 +10,7 @@ use ts_rs::TS;
 
 use crate::admin::AdminError as Error;
 use crate::admin::rows::delete_row;
+use crate::admin::sql_value::{Blob, SqlValue};
 use crate::app_state::AppState;
 use crate::auth::util::is_admin;
 use crate::util::uuid_to_b64;
@@ -37,7 +38,7 @@ pub async fn delete_user_handler(
       database_schema: None,
     },
     "id",
-    serde_json::Value::String(uuid_to_b64(&request.id)),
+    SqlValue::Blob(Blob::Base64UrlSafe(uuid_to_b64(&request.id))),
   )
   .await?;
 

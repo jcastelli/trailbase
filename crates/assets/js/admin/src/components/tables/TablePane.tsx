@@ -42,8 +42,8 @@ import {
 } from "@/components/ui/tooltip";
 
 import { createConfigQuery, invalidateConfig } from "@/lib/config";
-import type { RowData, FormRow2, Row2Data } from "@/lib/convert";
-import { formRow2ToFormRow } from "@/lib/convert";
+import type { FormRow2, Row2Data } from "@/lib/convert";
+import { formRow2ToFormRow, hashSqlValue } from "@/lib/convert";
 import { adminFetch } from "@/lib/fetch";
 import { urlSafeBase64ToUuid } from "@/lib/utils";
 import { dropTable, dropIndex } from "@/lib/table";
@@ -142,7 +142,7 @@ function renderCell2(
     const fileUpload = JSON.parse(value.Text) as FileUpload;
     if (imageMime(fileUpload)) {
       const pkCol = columns[pkIndex].name;
-      const pkVal = context.row.original[pkIndex] as string;
+      const pkVal = context.row.original[pkIndex];
       const url = imageUrl({
         tableName,
         query: {
@@ -170,7 +170,7 @@ function renderCell2(
 
     if (indexes.length > 0) {
       const pkCol = columns[pkIndex].name;
-      const pkVal = context.row.original[pkIndex] as string;
+      const pkVal = context.row.original[pkIndex];
       return (
         <div class="flex gap-2">
           <For each={indexes}>
@@ -195,98 +195,97 @@ function renderCell2(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function renderCell(
-  context: CellContext<RowData, unknown>,
-  tableName: QualifiedName,
-  columns: Column[],
-  pkIndex: number,
-  cell: {
-    col: Column;
-    isUUID: boolean;
-    isJSON: boolean;
-    isFile: boolean;
-    isFiles: boolean;
-  },
-): unknown {
-  const value = context.getValue();
-  if (value === null) {
-    return "NULL";
-  }
-
-  switch (typeof value) {
-    case "bigint":
-      return value.toString();
-    case "string": {
-      if (cell.isUUID) {
-        return urlSafeBase64ToUuid(value);
-      }
-
-      const imageMime = (f: FileUpload) => {
-        const mime = f.mime_type;
-        return mime === "image/jpeg" || mime === "image/png";
-      };
-
-      if (cell.isFile) {
-        const fileUpload = JSON.parse(value) as FileUpload;
-        if (imageMime(fileUpload)) {
-          const pkCol = columns[pkIndex].name;
-          const pkVal = context.row.original[pkIndex] as string;
-          const url = imageUrl({
-            tableName,
-            query: {
-              pk_column: pkCol,
-              pk_value: pkVal,
-              file_column_name: cell.col.name,
-              file_name: null,
-            },
-          });
-
-          return <Image url={url} mime={fileUpload.mime_type} />;
-        }
-      } else if (cell.isFiles) {
-        const fileUploads = JSON.parse(value) as FileUploads;
-
-        const indexes: number[] = [];
-        for (let i = 0; i < fileUploads.length; ++i) {
-          const file = fileUploads[i];
-          if (imageMime(file)) {
-            indexes.push(i);
-          }
-
-          if (indexes.length >= 3) break;
-        }
-
-        if (indexes.length > 0) {
-          const pkCol = columns[pkIndex].name;
-          const pkVal = context.row.original[pkIndex] as string;
-          return (
-            <div class="flex gap-2">
-              <For each={indexes}>
-                {(index: number) => {
-                  const fileUpload = fileUploads[index];
-                  const url = imageUrl({
-                    tableName,
-                    query: {
-                      pk_column: pkCol,
-                      pk_value: pkVal,
-                      file_column_name: cell.col.name,
-                      file_name: fileUpload.filename ?? null,
-                    },
-                  });
-
-                  return <Image url={url} mime={fileUpload.mime_type} />;
-                }}
-              </For>
-            </div>
-          );
-        }
-      }
-    }
-  }
-
-  return value;
-}
+// function renderCell(
+//   context: CellContext<RowData, unknown>,
+//   tableName: QualifiedName,
+//   columns: Column[],
+//   pkIndex: number,
+//   cell: {
+//     col: Column;
+//     isUUID: boolean;
+//     isJSON: boolean;
+//     isFile: boolean;
+//     isFiles: boolean;
+//   },
+// ): unknown {
+//   const value = context.getValue();
+//   if (value === null) {
+//     return "NULL";
+//   }
+//
+//   switch (typeof value) {
+//     case "bigint":
+//       return value.toString();
+//     case "string": {
+//       if (cell.isUUID) {
+//         return urlSafeBase64ToUuid(value);
+//       }
+//
+//       const imageMime = (f: FileUpload) => {
+//         const mime = f.mime_type;
+//         return mime === "image/jpeg" || mime === "image/png";
+//       };
+//
+//       if (cell.isFile) {
+//         const fileUpload = JSON.parse(value) as FileUpload;
+//         if (imageMime(fileUpload)) {
+//           const pkCol = columns[pkIndex].name;
+//           const pkVal = context.row.original[pkIndex];
+//           const url = imageUrl({
+//             tableName,
+//             query: {
+//               pk_column: pkCol,
+//               pk_value: pkVal,
+//               file_column_name: cell.col.name,
+//               file_name: null,
+//             },
+//           });
+//
+//           return <Image url={url} mime={fileUpload.mime_type} />;
+//         }
+//       } else if (cell.isFiles) {
+//         const fileUploads = JSON.parse(value) as FileUploads;
+//
+//         const indexes: number[] = [];
+//         for (let i = 0; i < fileUploads.length; ++i) {
+//           const file = fileUploads[i];
+//           if (imageMime(file)) {
+//             indexes.push(i);
+//           }
+//
+//           if (indexes.length >= 3) break;
+//         }
+//
+//         if (indexes.length > 0) {
+//           const pkCol = columns[pkIndex].name;
+//           const pkVal = context.row.original[pkIndex] as string;
+//           return (
+//             <div class="flex gap-2">
+//               <For each={indexes}>
+//                 {(index: number) => {
+//                   const fileUpload = fileUploads[index];
+//                   const url = imageUrl({
+//                     tableName,
+//                     query: {
+//                       pk_column: pkCol,
+//                       pk_value: pkVal,
+//                       file_column_name: cell.col.name,
+//                       file_name: fileUpload.filename ?? null,
+//                     },
+//                   });
+//
+//                   return <Image url={url} mime={fileUpload.mime_type} />;
+//                 }}
+//               </For>
+//             </div>
+//           );
+//         }
+//       }
+//     }
+//   }
+//
+//   return value;
+// }
 
 function Image(props: { url: string; mime: string }) {
   const imageData = useQuery(() => ({
@@ -647,7 +646,9 @@ function RowDataTable(props: {
   rowsRefetch: () => void;
 }) {
   const [editRow, setEditRow] = createSignal<FormRow2 | undefined>();
-  const [selectedRows, setSelectedRows] = createSignal(new Set<string>());
+  const [selectedRows, setSelectedRows] = createSignal(
+    new Map<string, SqlValue>(),
+  );
 
   const table = () => props.state.selected;
   const mutable = () => tableType(table()) === "table" && !hiddenTable(table());
@@ -721,15 +722,21 @@ function RowDataTable(props: {
                   onRowSelection={
                     mutable()
                       ? (rows: Row<Row2Data>[], value: boolean) => {
-                          const newSelection = new Set(selectedRows());
+                          const newSelection = new Map<string, SqlValue>(
+                            selectedRows(),
+                          );
+
                           for (const row of rows) {
-                            const rowId = row.original[
-                              pkColumnIndex()
-                            ] as string;
+                            const pkValue: SqlValue =
+                              row.original[pkColumnIndex()];
+                            const key = hashSqlValue(pkValue);
+
+                            console.log("kYE", key);
+
                             if (value) {
-                              newSelection.add(rowId);
+                              newSelection.set(key, pkValue);
                             } else {
-                              newSelection.delete(rowId);
+                              newSelection.delete(key);
                             }
                           }
                           setSelectedRows(newSelection);
@@ -775,12 +782,12 @@ function RowDataTable(props: {
             variant="destructive"
             disabled={selectedRows().size === 0}
             onClick={() => {
-              const ids = [...selectedRows()];
+              const ids = [...selectedRows().values()];
               if (ids.length === 0) {
                 return;
               }
 
-              setSelectedRows(new Set<string>());
+              setSelectedRows(new Map<string, SqlValue>());
               deleteRows(table().name.name, {
                 primary_key_column: columns()[pkColumnIndex()].name,
                 values: ids,

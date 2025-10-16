@@ -53,6 +53,14 @@ export function formRow2ToFormRow(
         return [k, null];
       }
 
+      if ("Integer" in v) {
+        return [k, v.Integer];
+      }
+
+      if ("Real" in v) {
+        return [k, v.Real];
+      }
+
       if ("Blob" in v) {
         const blob: Blob = v.Blob;
         if ("Base64UrlSafe" in blob) {
@@ -60,9 +68,18 @@ export function formRow2ToFormRow(
         }
         throw Error("Expected Base64UrlSafe");
       }
-      return [k, v];
+
+      if ("Text" in v) {
+        return [k, v.Text];
+      }
+
+      throw Error("Failed conversion");
     }),
   );
+}
+
+export function hashSqlValue(value: SqlValue): string {
+  return `__${JSON.stringify(value)}`;
 }
 
 export function literalDefault(
