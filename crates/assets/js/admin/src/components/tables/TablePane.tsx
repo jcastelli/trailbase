@@ -42,7 +42,8 @@ import {
 } from "@/components/ui/tooltip";
 
 import { createConfigQuery, invalidateConfig } from "@/lib/config";
-import type { FormRow, RowData } from "@/lib/convert";
+import type { RowData, FormRow2, Row2Data } from "@/lib/convert";
+import { formRow2ToFormRow } from "@/lib/convert";
 import { adminFetch } from "@/lib/fetch";
 import { urlSafeBase64ToUuid } from "@/lib/utils";
 import { dropTable, dropIndex } from "@/lib/table";
@@ -63,11 +64,13 @@ import {
   type TableType,
 } from "@/lib/schema";
 
+import type { Blob } from "@bindings/Blob";
 import type { Column } from "@bindings/Column";
 import type { ListRowsResponse } from "@bindings/ListRowsResponse";
 import type { ListSchemasResponse } from "@bindings/ListSchemasResponse";
 import type { QualifiedName } from "@bindings/QualifiedName";
 import type { ReadFilesQuery } from "@bindings/ReadFilesQuery";
+import type { SqlValue } from "@bindings/SqlValue";
 import type { Table } from "@bindings/Table";
 import type { TableIndex } from "@bindings/TableIndex";
 import type { TableTrigger } from "@bindings/TableTrigger";
@@ -84,14 +87,115 @@ type FileUpload = {
 
 type FileUploads = FileUpload[];
 
-function rowDataToRow(columns: Column[], row: RowData): FormRow {
-  const result: FormRow = {};
+function rowDataToRow(columns: Column[], row: Row2Data): FormRow2 {
+  const result: FormRow2 = {};
   for (let i = 0; i < row.length; ++i) {
     result[columns[i].name] = row[i];
   }
   return result;
 }
 
+function renderCell2(
+  context: CellContext<Row2Data, SqlValue>,
+  tableName: QualifiedName,
+  columns: Column[],
+  pkIndex: number,
+  cell: {
+    col: Column;
+    isUUID: boolean;
+    isJSON: boolean;
+    isFile: boolean;
+    isFiles: boolean;
+  },
+): unknown {
+  const value: SqlValue = context.getValue();
+  if (value === null || value === "Null") {
+    return "NULL";
+  }
+
+  if ("Integer" in value) {
+    return value.Integer.toString();
+  }
+
+  if ("Real" in value) {
+    return value.Real.toString();
+  }
+
+  if ("Blob" in value) {
+    const blob: Blob = value.Blob;
+    if ("Base64UrlSafe" in blob) {
+      return blob.Base64UrlSafe;
+    }
+    throw Error("Expected Base64UrlSafe");
+  }
+
+  if (cell.isUUID) {
+    return urlSafeBase64ToUuid(value.Text);
+  }
+
+  const imageMime = (f: FileUpload) => {
+    const mime = f.mime_type;
+    return mime === "image/jpeg" || mime === "image/png";
+  };
+
+  if (cell.isFile) {
+    const fileUpload = JSON.parse(value.Text) as FileUpload;
+    if (imageMime(fileUpload)) {
+      const pkCol = columns[pkIndex].name;
+      const pkVal = context.row.original[pkIndex] as string;
+      const url = imageUrl({
+        tableName,
+        query: {
+          pk_column: pkCol,
+          pk_value: pkVal,
+          file_column_name: cell.col.name,
+          file_name: null,
+        },
+      });
+
+      return <Image url={url} mime={fileUpload.mime_type} />;
+    }
+  } else if (cell.isFiles) {
+    const fileUploads = JSON.parse(value.Text) as FileUploads;
+
+    const indexes: number[] = [];
+    for (let i = 0; i < fileUploads.length; ++i) {
+      const file = fileUploads[i];
+      if (imageMime(file)) {
+        indexes.push(i);
+      }
+
+      if (indexes.length >= 3) break;
+    }
+
+    if (indexes.length > 0) {
+      const pkCol = columns[pkIndex].name;
+      const pkVal = context.row.original[pkIndex] as string;
+      return (
+        <div class="flex gap-2">
+          <For each={indexes}>
+            {(index: number) => {
+              const fileUpload = fileUploads[index];
+              const url = imageUrl({
+                tableName,
+                query: {
+                  pk_column: pkCol,
+                  pk_value: pkVal,
+                  file_column_name: cell.col.name,
+                  file_name: fileUpload.filename ?? null,
+                },
+              });
+
+              return <Image url={url} mime={fileUpload.mime_type} />;
+            }}
+          </For>
+        </div>
+      );
+    }
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function renderCell(
   context: CellContext<RowData, unknown>,
   tableName: QualifiedName,
@@ -454,7 +558,7 @@ type TableState = {
 
   // Derived
   pkColumnIndex: number;
-  columnDefs: ColumnDef<RowData>[];
+  columnDefs: ColumnDef<Row2Data, SqlValue>[];
 
   response: ListRowsResponse;
 };
@@ -495,7 +599,7 @@ function buildColumnDefs(
   tableType: TableType,
   pkColumn: number,
   columns: Column[],
-): ColumnDef<RowData>[] {
+): ColumnDef<Row2Data, SqlValue>[] {
   return columns.map((col, idx) => {
     const fk = getForeignKey(col.options);
     const notNull = isNotNull(col.options);
@@ -520,7 +624,7 @@ function buildColumnDefs(
     return {
       header,
       cell: (context) =>
-        renderCell(context, tableName, columns, pkColumn, {
+        renderCell2(context, tableName, columns, pkColumn, {
           col: col,
           isUUID,
           isJSON,
@@ -531,7 +635,7 @@ function buildColumnDefs(
           isFile: isFile && tableType !== "view",
           isFiles: isFiles && tableType !== "view",
         }),
-      accessorFn: (row: RowData) => row[idx],
+      accessorFn: (row: Row2Data) => row[idx],
     };
   });
 }
@@ -542,7 +646,7 @@ function RowDataTable(props: {
   filter: SimpleSignal<string | undefined>;
   rowsRefetch: () => void;
 }) {
-  const [editRow, setEditRow] = createSignal<FormRow | undefined>();
+  const [editRow, setEditRow] = createSignal<FormRow2 | undefined>();
   const [selectedRows, setSelectedRows] = createSignal(new Set<string>());
 
   const table = () => props.state.selected;
@@ -571,7 +675,7 @@ function RowDataTable(props: {
                 <InsertUpdateRowForm
                   schema={table() as Table}
                   rowsRefetch={rowsRefetch}
-                  row={editRow()}
+                  row={formRow2ToFormRow(editRow())}
                   {...sheet}
                 />
               </SheetContent>
@@ -590,8 +694,9 @@ function RowDataTable(props: {
 
               <div class="space-y-2 overflow-auto">
                 <DataTable
+                  // NOTE: The formatting is done via the columnsDefs.
                   columns={() => props.state.columnDefs}
-                  data={() => props.state.response.rows}
+                  data={() => props.state.response.rows2}
                   rowCount={totalRowCount()}
                   pagination={props.pagination[0]()}
                   onPaginationChange={(
@@ -608,14 +713,14 @@ function RowDataTable(props: {
                   }}
                   onRowClick={
                     mutable()
-                      ? (_idx: number, row: RowData) => {
+                      ? (_idx: number, row: Row2Data) => {
                           setEditRow(rowDataToRow(columns(), row));
                         }
                       : undefined
                   }
                   onRowSelection={
                     mutable()
-                      ? (rows: Row<RowData>[], value: boolean) => {
+                      ? (rows: Row<Row2Data>[], value: boolean) => {
                           const newSelection = new Set(selectedRows());
                           for (const row of rows) {
                             const rowId = row.original[

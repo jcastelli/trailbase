@@ -2,6 +2,8 @@ use trailbase_schema::json::{JsonError, value_to_flat_json};
 use trailbase_schema::sqlite::{Column, ColumnAffinityType, ColumnDataType};
 use trailbase_sqlite::{Row, Rows, ValueType};
 
+use crate::admin::sql_value::SqlValue;
+
 /// Best-effort conversion from row values to column definition.
 ///
 /// WARN: This is lossy and whenever possible we should rely on parsed "CREATE TABLE" statement for
@@ -43,4 +45,18 @@ pub(crate) fn rows_to_flat_json_arrays(
   rows: &Rows,
 ) -> Result<Vec<Vec<serde_json::Value>>, JsonError> {
   return rows.iter().map(row_to_flat_json_array).collect();
+}
+
+fn row_to_sql_value_row(row: &Row) -> Result<Vec<SqlValue>, JsonError> {
+  return (0..row.column_count())
+    .map(|i| -> Result<SqlValue, JsonError> {
+      let value = row.get_value(i).ok_or(JsonError::ValueNotFound)?;
+      return Ok(value.into());
+    })
+    .collect();
+}
+
+#[inline]
+pub(crate) fn rows_to_sql_value_rows(rows: &Rows) -> Result<Vec<Vec<SqlValue>>, JsonError> {
+  return rows.iter().map(row_to_sql_value_row).collect();
 }

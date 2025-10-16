@@ -250,6 +250,7 @@ export function buildSecretFormField(
 
 export function buildOptionalTextAreaFormField(
   opts: Omit<TextFieldOptions, "type">,
+  // Height in number of lines of the text area.
   rows?: number,
 ) {
   return (field: () => FieldApiT<string | undefined>) => {

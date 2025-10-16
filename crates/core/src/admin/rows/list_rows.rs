@@ -9,7 +9,8 @@ use trailbase_schema::sqlite::{Column, ColumnDataType};
 use ts_rs::TS;
 
 use crate::admin::AdminError as Error;
-use crate::admin::util::rows_to_flat_json_arrays;
+use crate::admin::sql_value::SqlValue;
+use crate::admin::util::{rows_to_flat_json_arrays, rows_to_sql_value_rows};
 use crate::app_state::AppState;
 use crate::listing::{WhereClause, build_filter_where_clause, cursor_to_value, limit_or_default};
 use crate::schema_metadata::{TableMetadata, TableOrViewMetadata};
@@ -26,6 +27,8 @@ pub struct ListRowsResponse {
   // base64, this is thus a just a JSON subset. See test below.
   #[ts(type = "(string | number | boolean | null)[][]")]
   pub rows: Vec<Vec<serde_json::Value>>,
+
+  pub rows2: Vec<Vec<SqlValue>>,
 }
 
 pub async fn list_rows_handler(
@@ -97,7 +100,7 @@ pub async fn list_rows_handler(
     (Some(cursor), Some((_idx, c))) => Some(parse_cursor(&cursor, c)?),
     _ => None,
   };
-  let (rows, columns) = fetch_rows(
+  let (rows, rows2, columns) = fetch_rows(
     state.conn(),
     qualified_name,
     filter_where_clause,
@@ -149,6 +152,7 @@ pub async fn list_rows_handler(
       }
     },
     rows,
+    rows2,
   }));
 }
 
@@ -165,7 +169,7 @@ async fn fetch_rows(
   filter_where_clause: WhereClause,
   order: &Option<Order>,
   pagination: Pagination<'_>,
-) -> Result<(Vec<Vec<serde_json::Value>>, Vec<Column>), Error> {
+) -> Result<(Vec<Vec<serde_json::Value>>, Vec<Vec<SqlValue>>, Vec<Column>), Error> {
   let WhereClause {
     mut clause,
     mut params,
@@ -233,6 +237,7 @@ async fn fetch_rows(
 
   return Ok((
     rows_to_flat_json_arrays(&result_rows)?,
+    rows_to_sql_value_rows(&result_rows)?,
     crate::admin::util::rows_to_columns(&result_rows),
   ));
 }
@@ -299,7 +304,7 @@ mod tests {
 
     state.rebuild_schema_cache().await.unwrap();
 
-    let (data, cols) = fetch_rows(
+    let (rows, _rows2, cols) = fetch_rows(
       conn,
       &QualifiedName {
         name: "test_table".to_string(),
@@ -322,7 +327,7 @@ mod tests {
 
     assert_eq!(cols.len(), 4);
 
-    let row = data.get(0).unwrap();
+    let row = rows.get(0).unwrap();
 
     assert!(row.get(0).unwrap().is_string());
     assert!(row.get(1).unwrap().is_i64());

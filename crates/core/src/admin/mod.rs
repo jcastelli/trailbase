@@ -10,6 +10,7 @@ mod oauth_providers;
 mod parse;
 mod query;
 pub(crate) mod rows;
+pub(super) mod sql_value;
 mod table;
 pub(crate) mod user;
 mod util;

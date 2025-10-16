@@ -15,6 +15,8 @@ import {
 
 import type { Column } from "@bindings/Column";
 import type { ColumnDataType } from "@bindings/ColumnDataType";
+import type { SqlValue } from "@bindings/SqlValue";
+import type { Blob } from "@bindings/Blob";
 import type { Table } from "@bindings/Table";
 
 // NOTE: We use a simpler type here over `Object`, `JsonValue` or other recursive
@@ -30,6 +32,38 @@ export type FormRow = { [key: string]: RowValue };
 
 // An array representation of a single row.
 export type RowData = RowValue[];
+
+// A record representation of a single row keyed by column name.
+export type FormRow2 = { [key: string]: SqlValue };
+
+// An array representation of a single row.
+export type Row2Data = SqlValue[];
+
+// TODO: Remove when everything is converted to Row2 format.
+export function formRow2ToFormRow(
+  form: FormRow2 | undefined,
+): FormRow | undefined {
+  if (form === undefined) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(form).map(([k, v]) => {
+      if (v === "Null") {
+        return [k, null];
+      }
+
+      if ("Blob" in v) {
+        const blob: Blob = v.Blob;
+        if ("Base64UrlSafe" in blob) {
+          return [k, blob.Base64UrlSafe];
+        }
+        throw Error("Expected Base64UrlSafe");
+      }
+      return [k, v];
+    }),
+  );
+}
 
 export function literalDefault(
   type: ColumnDataType,
