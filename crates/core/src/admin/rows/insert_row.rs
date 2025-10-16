@@ -9,27 +9,25 @@ use crate::app_state::AppState;
 use crate::records::params::{JsonRow, Params};
 use crate::records::write_queries::run_insert_query;
 
-#[derive(Debug, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct InsertRowRequest {
   /// Row data, which is expected to be a map from column name to value.
   pub row: JsonRow,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InsertRowResponse {
+  pub row_id: i64,
+}
+
 pub async fn insert_row_handler(
   State(state): State<AppState>,
   Path(table_name): Path<String>,
   Json(request): Json<InsertRowRequest>,
-) -> Result<(), Error> {
-  let _row_id = insert_row(&state, QualifiedName::parse(&table_name)?, request.row).await?;
-  return Ok(());
-}
+) -> Result<Json<InsertRowResponse>, Error> {
+  let table_name = QualifiedName::parse(&table_name)?;
 
-pub(crate) async fn insert_row(
-  state: &AppState,
-  table_name: QualifiedName,
-  json_row: JsonRow,
-) -> Result<i64, Error> {
   let Some(schema_metadata) = state.schema_metadata().get_table(&table_name) else {
     return Err(Error::Precondition(format!(
       "Table {table_name:?} not found"
@@ -37,18 +35,18 @@ pub(crate) async fn insert_row(
   };
 
   let rowid_value = run_insert_query(
-    state,
+    &state,
     &QualifiedNameEscaped::new(&schema_metadata.schema.name),
     None,
     "_rowid_",
     // NOTE: We "fancy" parse JSON string values, since the UI currently ships everything as a
     // string. We could consider pushing some more type-awareness into the ui.
-    Params::for_insert(&*schema_metadata, json_row, None, true)?,
+    Params::for_insert(&*schema_metadata, request.row, None, true)?,
   )
   .await?;
 
   return match rowid_value {
-    rusqlite::types::Value::Integer(rowid) => Ok(rowid),
+    rusqlite::types::Value::Integer(rowid) => Ok(Json(InsertRowResponse { row_id: rowid })),
     _ => Err(Error::Internal(
       format!("unexpected return type: {rowid_value:?}").into(),
     )),

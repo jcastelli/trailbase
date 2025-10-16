@@ -113,7 +113,7 @@ mod tests {
   use uuid::Uuid;
 
   use super::*;
-  use crate::admin::rows::insert_row::insert_row;
+  use crate::admin::rows::insert_row::{InsertRowRequest, insert_row_handler};
   use crate::admin::rows::list_rows::list_rows_handler;
   use crate::admin::rows::update_row::{UpdateRowRequest, update_row_handler};
   use crate::admin::sql_value::Blob;
@@ -179,13 +179,15 @@ mod tests {
     .unwrap();
 
     let insert = async |value: &str| {
-      let row_id = insert_row(
-        &state,
-        QualifiedName::parse(&table_name).unwrap(),
-        json_row_from_value(serde_json::json!({
-          "col0": value,
-        }))
-        .unwrap(),
+      let Json(response) = insert_row_handler(
+        State(state.clone()),
+        Path(table_name.clone()),
+        Json(InsertRowRequest {
+          row: json_row_from_value(serde_json::json!({
+            "col0": value,
+          }))
+          .unwrap(),
+        }),
       )
       .await
       .unwrap();
@@ -194,7 +196,7 @@ mod tests {
         .conn()
         .read_query_value::<TestTable>(
           format!("SELECT * FROM {table_name} WHERE _rowid_ = ?1"),
-          trailbase_sqlite::params!(row_id),
+          trailbase_sqlite::params!(response.row_id),
         )
         .await
         .unwrap();
