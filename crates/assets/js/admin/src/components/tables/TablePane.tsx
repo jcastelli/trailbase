@@ -43,7 +43,7 @@ import {
 
 import { createConfigQuery, invalidateConfig } from "@/lib/config";
 import type { FormRow2, Row2Data } from "@/lib/convert";
-import { formRow2ToFormRow, hashSqlValue } from "@/lib/convert";
+import { hashSqlValue } from "@/lib/convert";
 import { adminFetch } from "@/lib/fetch";
 import { urlSafeBase64ToUuid } from "@/lib/utils";
 import { dropTable, dropIndex } from "@/lib/table";
@@ -676,7 +676,7 @@ function RowDataTable(props: {
                 <InsertUpdateRowForm
                   schema={table() as Table}
                   rowsRefetch={rowsRefetch}
-                  row={formRow2ToFormRow(editRow())}
+                  row={editRow()}
                   {...sheet}
                 />
               </SheetContent>
@@ -715,32 +715,32 @@ function RowDataTable(props: {
                   onRowClick={
                     mutable()
                       ? (_idx: number, row: Row2Data) => {
-                          setEditRow(rowDataToRow(columns(), row));
-                        }
+                        setEditRow(rowDataToRow(columns(), row));
+                      }
                       : undefined
                   }
                   onRowSelection={
                     mutable()
                       ? (rows: Row<Row2Data>[], value: boolean) => {
-                          const newSelection = new Map<string, SqlValue>(
-                            selectedRows(),
-                          );
+                        const newSelection = new Map<string, SqlValue>(
+                          selectedRows(),
+                        );
 
-                          for (const row of rows) {
-                            const pkValue: SqlValue =
-                              row.original[pkColumnIndex()];
-                            const key = hashSqlValue(pkValue);
+                        for (const row of rows) {
+                          const pkValue: SqlValue =
+                            row.original[pkColumnIndex()];
+                          const key = hashSqlValue(pkValue);
 
-                            console.log("kYE", key);
+                          console.log("kYE", key);
 
-                            if (value) {
-                              newSelection.set(key, pkValue);
-                            } else {
-                              newSelection.delete(key);
-                            }
+                          if (value) {
+                            newSelection.set(key, pkValue);
+                          } else {
+                            newSelection.delete(key);
                           }
-                          setSelectedRows(newSelection);
                         }
+                        setSelectedRows(newSelection);
+                      }
                       : undefined
                   }
                 />
@@ -818,7 +818,7 @@ export function TablePane(props: {
       const tbl = table();
       return (
         (idx.name.database_schema ?? "main") ==
-          (tbl.name.database_schema ?? "main") &&
+        (tbl.name.database_schema ?? "main") &&
         idx.table_name === tbl.name.name
       );
     });
@@ -1004,24 +1004,24 @@ export function TablePane(props: {
                           hidden()
                             ? undefined
                             : (_idx: number, index: TableIndex) => {
-                                setEditIndex(index);
-                              }
+                              setEditIndex(index);
+                            }
                         }
                         onRowSelection={
                           hidden()
                             ? undefined
                             : (rows: Row<TableIndex>[], value: boolean) => {
-                                const newSelection = new Set(selectedIndexes());
-                                for (const row of rows) {
-                                  const name = row.original.name.name;
-                                  if (value) {
-                                    newSelection.add(name);
-                                  } else {
-                                    newSelection.delete(name);
-                                  }
+                              const newSelection = new Set(selectedIndexes());
+                              for (const row of rows) {
+                                const name = row.original.name.name;
+                                if (value) {
+                                  newSelection.add(name);
+                                } else {
+                                  newSelection.delete(name);
                                 }
-                                setSelectedIndexes(newSelection);
                               }
+                              setSelectedIndexes(newSelection);
+                            }
                         }
                       />
                     </div>

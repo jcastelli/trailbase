@@ -5,14 +5,13 @@ use axum::{
   response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use trailbase_schema::json::flat_json_to_value;
 use trailbase_schema::{QualifiedName, QualifiedNameEscaped};
 use ts_rs::TS;
 
 use crate::admin::AdminError as Error;
-use crate::admin::sql_value::SqlValue;
 use crate::app_state::AppState;
 use crate::records::write_queries::run_delete_query;
+use crate::sql_value::SqlValue;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -116,10 +115,9 @@ mod tests {
   use crate::admin::rows::insert_row::{InsertRowRequest, insert_row_handler};
   use crate::admin::rows::list_rows::list_rows_handler;
   use crate::admin::rows::update_row::{UpdateRowRequest, update_row_handler};
-  use crate::admin::sql_value::Blob;
   use crate::admin::table::{CreateTableRequest, create_table_handler};
   use crate::app_state::*;
-  use crate::records::test_utils::json_row_from_value;
+  use crate::sql_value::Blob;
   use crate::util::uuid_to_b64;
 
   // TODO: This full-lifecycle test should probably live outside the scope of delete_row.
@@ -183,10 +181,7 @@ mod tests {
         State(state.clone()),
         Path(table_name.clone()),
         Json(InsertRowRequest {
-          row: json_row_from_value(serde_json::json!({
-            "col0": value,
-          }))
-          .unwrap(),
+          row: indexmap::IndexMap::from([("col0".to_string(), SqlValue::Text(value.to_string()))]),
         }),
       )
       .await
@@ -231,11 +226,11 @@ mod tests {
       Path(table_name.clone()),
       Json(UpdateRowRequest {
         primary_key_column: pk_col.clone(),
-        primary_key_value: serde_json::Value::String(uuid_to_b64(&id0)),
-        row: json_row_from_value(serde_json::json!({
-          "col0": updated_value.to_string(),
-        }))
-        .unwrap(),
+        primary_key_value: SqlValue::Blob(Blob::Base64UrlSafe(uuid_to_b64(&id0))),
+        row: indexmap::IndexMap::from([(
+          "col0".to_string(),
+          SqlValue::Text(updated_value.to_string()),
+        )]),
       }),
     )
     .await
@@ -249,10 +244,10 @@ mod tests {
     .await
     .unwrap();
 
-    assert_eq!(listing.rows.len(), 1, "Listing: {listing:?}");
+    assert_eq!(listing.rows2.len(), 1, "Listing: {listing:?}");
     assert_eq!(
-      listing.rows[0][1],
-      serde_json::Value::String(updated_value.to_string())
+      listing.rows2[0][1],
+      SqlValue::Text(updated_value.to_string())
     );
 
     let delete = |id: uuid::Uuid| {

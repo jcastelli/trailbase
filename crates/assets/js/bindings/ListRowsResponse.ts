@@ -2,4 +2,4 @@
 import type { Column } from "./Column";
 import type { SqlValue } from "./SqlValue";
 
-export type ListRowsResponse = { total_row_count: bigint, cursor: string | null, columns: Array<Column>, rows: (string | number | boolean | null)[][], rows2: Array<Array<SqlValue>>, };
+export type ListRowsResponse = { total_row_count: bigint, cursor: string | null, columns: Array<Column>, rows2: Array<Array<SqlValue>>, };

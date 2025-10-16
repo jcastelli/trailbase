@@ -34,49 +34,49 @@ export type FormRow = { [key: string]: RowValue };
 export type RowData = RowValue[];
 
 // A record representation of a single row keyed by column name.
-export type FormRow2 = { [key: string]: SqlValue };
+export type FormRow2 = { [key: string]: (SqlValue | null) };
 
 // An array representation of a single row.
 export type Row2Data = SqlValue[];
 
 // TODO: Remove when everything is converted to Row2 format.
-export function formRow2ToFormRow(
-  form: FormRow2 | undefined,
-): FormRow | undefined {
-  if (form === undefined) {
-    return undefined;
-  }
-
-  return Object.fromEntries(
-    Object.entries(form).map(([k, v]) => {
-      if (v === "Null") {
-        return [k, null];
-      }
-
-      if ("Integer" in v) {
-        return [k, v.Integer];
-      }
-
-      if ("Real" in v) {
-        return [k, v.Real];
-      }
-
-      if ("Blob" in v) {
-        const blob: Blob = v.Blob;
-        if ("Base64UrlSafe" in blob) {
-          return [k, blob.Base64UrlSafe];
-        }
-        throw Error("Expected Base64UrlSafe");
-      }
-
-      if ("Text" in v) {
-        return [k, v.Text];
-      }
-
-      throw Error("Failed conversion");
-    }),
-  );
-}
+// export function formRow2ToFormRow(
+//   form: FormRow2 | undefined,
+// ): FormRow | undefined {
+//   if (form === undefined) {
+//     return undefined;
+//   }
+//
+//   return Object.fromEntries(
+//     Object.entries(form).map(([k, v]) => {
+//       if (v === null || v === "Null") {
+//         return [k, null];
+//       }
+//
+//       if ("Integer" in v) {
+//         return [k, v.Integer];
+//       }
+//
+//       if ("Real" in v) {
+//         return [k, v.Real];
+//       }
+//
+//       if ("Blob" in v) {
+//         const blob: Blob = v.Blob;
+//         if ("Base64UrlSafe" in blob) {
+//           return [k, blob.Base64UrlSafe];
+//         }
+//         throw Error("Expected Base64UrlSafe");
+//       }
+//
+//       if ("Text" in v) {
+//         return [k, v.Text];
+//       }
+//
+//       throw Error("Failed conversion");
+//     }),
+//   );
+// }
 
 export function hashSqlValue(value: SqlValue): string {
   return `__${JSON.stringify(value)}`;
@@ -299,8 +299,13 @@ export function copyRow(row: FormRow): FormRow {
   return { ...row };
 }
 
-export function buildDefaultRow(schema: Table): FormRow {
-  const obj: FormRow = {};
+// Just to make it explicit.
+export function copyRow2(row: FormRow2): FormRow2 {
+  return { ...row };
+}
+
+export function buildDefaultRow(schema: Table): FormRow2 {
+  const obj: FormRow2 = {};
   for (const col of schema.columns) {
     const type = col.data_type;
     const isPk = isPrimaryKeyColumn(col);
@@ -319,7 +324,7 @@ export function buildDefaultRow(schema: Table): FormRow {
       obj[col.name] = null;
       continue;
     } else if (nullable) {
-      obj[col.name] = null;
+      obj[col.name] = "Null";
       continue;
     }
 
@@ -328,16 +333,16 @@ export function buildDefaultRow(schema: Table): FormRow {
     // ...we fall back to generic defaults. We may be wrong based on CHECK constraints.
     if (type === "Blob") {
       if (foreignKey !== undefined) {
-        obj[col.name] = `<${foreignKey.foreign_table.toUpperCase()}_ID>`;
+        obj[col.name] = { Blob: { Base64UrlSafe: `<${foreignKey.foreign_table.toUpperCase()}_ID>` } };
       } else {
-        obj[col.name] = "";
+        obj[col.name] = { Blob: { Base64UrlSafe: "" } };
       }
     } else if (type === "Text") {
-      obj[col.name] = "";
+      obj[col.name] = { Text: "" };
     } else if (isInt(type)) {
-      obj[col.name] = 0;
+      obj[col.name] = { Integer: BigInt(0) };
     } else if (isReal(type)) {
-      obj[col.name] = 0.0;
+      obj[col.name] = { Real: 0.0 };
     } else {
       console.warn(`No fallback for ${type} column: ${col.name}`);
     }

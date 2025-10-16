@@ -2,7 +2,7 @@ use trailbase_schema::json::{JsonError, value_to_flat_json};
 use trailbase_schema::sqlite::{Column, ColumnAffinityType, ColumnDataType};
 use trailbase_sqlite::{Row, Rows, ValueType};
 
-use crate::admin::sql_value::SqlValue;
+use crate::sql_value::SqlValue;
 
 /// Best-effort conversion from row values to column definition.
 ///

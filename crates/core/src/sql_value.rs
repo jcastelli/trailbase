@@ -11,7 +11,7 @@ pub enum DecodeError {
   Hex,
 }
 
-#[derive(Debug, Deserialize, Serialize, TS)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, TS)]
 #[ts(export)]
 pub enum Blob {
   Array(Vec<u8>),
@@ -20,8 +20,18 @@ pub enum Blob {
   Hex(String),
 }
 
+impl Blob {
+  pub fn to_b64_url_safe(&self) -> Result<String, DecodeError> {
+    return Ok(match self {
+      Blob::Array(v) => BASE64_URL_SAFE.encode(v),
+      Blob::Base64UrlSafe(s) => s.clone(),
+      Blob::Hex(s) => BASE64_URL_SAFE.encode(decode_hex(s)?),
+    });
+  }
+}
+
 /// Mimic's rusqlite's Value but is JS/JSON serializable and supports multiple blob encodings..
-#[derive(Debug, Deserialize, Serialize, TS)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, TS)]
 #[ts(export)]
 pub enum SqlValue {
   Null,

@@ -6,14 +6,15 @@ use ts_rs::TS;
 
 use crate::admin::AdminError as Error;
 use crate::app_state::AppState;
-use crate::records::params::{JsonRow, Params};
+use crate::records::params::Params;
 use crate::records::write_queries::run_insert_query;
+use crate::sql_value::SqlValue;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct InsertRowRequest {
   /// Row data, which is expected to be a map from column name to value.
-  pub row: JsonRow,
+  pub row: indexmap::IndexMap<String, SqlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,7 +42,7 @@ pub async fn insert_row_handler(
     "_rowid_",
     // NOTE: We "fancy" parse JSON string values, since the UI currently ships everything as a
     // string. We could consider pushing some more type-awareness into the ui.
-    Params::for_insert(&*schema_metadata, request.row, None, true)?,
+    Params::for_admin_insert(&*schema_metadata, request.row)?,
   )
   .await?;
 

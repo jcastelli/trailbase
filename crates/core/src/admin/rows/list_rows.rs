@@ -9,11 +9,11 @@ use trailbase_schema::sqlite::{Column, ColumnDataType};
 use ts_rs::TS;
 
 use crate::admin::AdminError as Error;
-use crate::admin::sql_value::SqlValue;
 use crate::admin::util::{rows_to_flat_json_arrays, rows_to_sql_value_rows};
 use crate::app_state::AppState;
 use crate::listing::{WhereClause, build_filter_where_clause, cursor_to_value, limit_or_default};
 use crate::schema_metadata::{TableMetadata, TableOrViewMetadata};
+use crate::sql_value::SqlValue;
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
@@ -25,9 +25,8 @@ pub struct ListRowsResponse {
 
   // NOTE: that we're not expanding nested JSON and are encoding Blob to
   // base64, this is thus a just a JSON subset. See test below.
-  #[ts(type = "(string | number | boolean | null)[][]")]
-  pub rows: Vec<Vec<serde_json::Value>>,
-
+  // #[ts(type = "(string | number | boolean | null)[][]")]
+  // pub rows: Vec<Vec<serde_json::Value>>,
   pub rows2: Vec<Vec<SqlValue>>,
 }
 
@@ -100,7 +99,7 @@ pub async fn list_rows_handler(
     (Some(cursor), Some((_idx, c))) => Some(parse_cursor(&cursor, c)?),
     _ => None,
   };
-  let (rows, rows2, columns) = fetch_rows(
+  let (rows, columns) = fetch_rows(
     state.conn(),
     qualified_name,
     filter_where_clause,
@@ -118,10 +117,10 @@ pub async fn list_rows_handler(
     let row = rows.last()?;
     assert!(row.len() > col_idx);
     match &row[col_idx] {
-      serde_json::Value::Number(n) if n.is_i64() => Some(n.to_string()),
-      serde_json::Value::String(id) => {
+      SqlValue::Integer(n) => Some(n.to_string()),
+      SqlValue::Blob(b) => {
         // Should be a base64 encoded [u8; 16] id.
-        Some(id.clone())
+        b.to_b64_url_safe().ok()
       }
       _ => None,
     }
@@ -151,8 +150,7 @@ pub async fn list_rows_handler(
         }
       }
     },
-    rows,
-    rows2,
+    rows2: rows,
   }));
 }
 
@@ -169,7 +167,7 @@ async fn fetch_rows(
   filter_where_clause: WhereClause,
   order: &Option<Order>,
   pagination: Pagination<'_>,
-) -> Result<(Vec<Vec<serde_json::Value>>, Vec<Vec<SqlValue>>, Vec<Column>), Error> {
+) -> Result<(Vec<Vec<SqlValue>>, Vec<Column>), Error> {
   let WhereClause {
     mut clause,
     mut params,
@@ -236,7 +234,6 @@ async fn fetch_rows(
     })?;
 
   return Ok((
-    rows_to_flat_json_arrays(&result_rows)?,
     rows_to_sql_value_rows(&result_rows)?,
     crate::admin::util::rows_to_columns(&result_rows),
   ));
@@ -259,6 +256,7 @@ mod tests {
   use base64::prelude::*;
 
   use super::*;
+  use crate::sql_value::Blob;
   use crate::{admin::rows::list_rows::Pagination, app_state::*, listing::WhereClause};
 
   #[tokio::test]
@@ -304,7 +302,7 @@ mod tests {
 
     state.rebuild_schema_cache().await.unwrap();
 
-    let (rows, _rows2, cols) = fetch_rows(
+    let (rows, cols) = fetch_rows(
       conn,
       &QualifiedName {
         name: "test_table".to_string(),
@@ -329,18 +327,18 @@ mod tests {
 
     let row = rows.get(0).unwrap();
 
-    assert!(row.get(0).unwrap().is_string());
-    assert!(row.get(1).unwrap().is_i64());
+    assert!(matches!(row.get(0).unwrap(), SqlValue::Text(_)));
+    assert!(matches!(row.get(1).unwrap(), SqlValue::Integer(_)));
 
     // CHECK that blob gets serialized as padded, url-safe base64.
-    let serde_json::Value::String(b64) = row.get(2).unwrap() else {
+    let SqlValue::Blob(Blob::Base64UrlSafe(b64)) = row.get(2).unwrap() else {
       panic!("Not a string: {:?}", row);
     };
     let blob = BASE64_URL_SAFE.decode(b64).unwrap();
     assert_eq!(format!("{:X?}", blob), "[FA, CE]");
 
     // CHECK that fetch_rows doesn't expand nested JSON.
-    let serde_json::Value::String(json) = row.get(3).unwrap() else {
+    let SqlValue::Text(json) = row.get(3).unwrap() else {
       panic!("Not a string: {:?}", row);
     };
     assert_eq!(json, r#"{"name": "alice"}"#);

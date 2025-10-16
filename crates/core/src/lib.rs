@@ -22,6 +22,7 @@ mod migrations;
 mod scheduler;
 mod schema_metadata;
 mod server;
+mod sql_value;
 mod transaction;
 
 #[cfg(feature = "wasm")]

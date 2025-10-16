@@ -8,6 +8,7 @@ use trailbase_sqlite::{NamedParams, Value};
 
 use crate::records::RecordApi;
 use crate::schema_metadata::{self, JsonColumnMetadata, TableMetadata};
+use crate::sql_value::SqlValue;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParamsError {
@@ -37,6 +38,8 @@ pub enum ParamsError {
   Schema(#[from] trailbase_schema::Error),
   #[error("ObjectStore error: {0}")]
   Storage(Arc<object_store::Error>),
+  #[error("SqlValueDecode: {0}")]
+  SqlValueDecode(#[from] crate::sql_value::DecodeError),
 }
 
 impl From<serde_json::Error> for ParamsError {
@@ -198,6 +201,35 @@ impl Params {
     });
   }
 
+  pub fn for_admin_insert<S: SchemaAccessor>(
+    accessor: &S,
+    row: indexmap::IndexMap<String, SqlValue>,
+  ) -> Result<Self, ParamsError> {
+    let mut named_params = NamedParams::with_capacity(row.len());
+    let mut column_names = Vec::with_capacity(row.len());
+    let mut column_indexes = Vec::with_capacity(row.len());
+
+    // Insert parameters case.
+    for (key, value) in row {
+      // We simply skip unknown columns, this could simply be malformed input or version skew. This
+      // is similar in spirit to protobuf's unknown fields behavior.
+      let Some((index, _col, _json_meta)) = accessor.column_by_name(&key) else {
+        continue;
+      };
+
+      named_params.push((prefix_colon(&key).into(), value.try_into()?));
+      column_names.push(key);
+      column_indexes.push(index);
+    }
+
+    return Ok(Params::Insert {
+      named_params,
+      files: vec![],
+      column_names,
+      column_indexes,
+    });
+  }
+
   pub fn for_update<S: SchemaAccessor>(
     accessor: &S,
     json: JsonRow,
@@ -257,6 +289,52 @@ impl Params {
     return Ok(Params::Update {
       named_params,
       files,
+      column_names,
+      column_indexes,
+      pk_column_name,
+    });
+  }
+
+  pub fn for_admin_update<S: SchemaAccessor>(
+    accessor: &S,
+    row: indexmap::IndexMap<String, SqlValue>,
+    pk_column_name: String,
+    pk_column_value: SqlValue,
+  ) -> Result<Self, ParamsError> {
+    let mut named_params = NamedParams::with_capacity(row.len() + 1);
+    let mut column_names = Vec::with_capacity(row.len() + 1);
+    let mut column_indexes = Vec::with_capacity(row.len() + 1);
+
+    let pk_column_param = pk_column_value.try_into()?;
+
+    // Update parameters case.
+    for (key, value) in row {
+      // We simply skip unknown columns, this could simply be malformed input or version skew. This
+      // is similar in spirit to protobuf's unknown fields behavior.
+      let Some((index, _col, _json_meta)) = accessor.column_by_name(&key) else {
+        continue;
+      };
+
+      let param: Value = value.try_into()?;
+
+      if key == pk_column_name && pk_column_param != param {
+        return Err(ParamsError::Column(
+          "Primary key mismatch in update request",
+        ));
+      }
+
+      named_params.push((prefix_colon(&key).into(), param));
+      column_names.push(key);
+      column_indexes.push(index);
+    }
+
+    // Inject the pk_value. It may already be present, if redundantly provided both in the API path
+    // *and* the request. In most cases it probably wont and duplication is not an issue.
+    named_params.push((":__pk_value".into(), pk_column_param));
+
+    return Ok(Params::Update {
+      named_params,
+      files: vec![],
       column_names,
       column_indexes,
       pk_column_name,
