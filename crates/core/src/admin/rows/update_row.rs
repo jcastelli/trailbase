@@ -21,7 +21,7 @@ pub struct UpdateRowRequest {
   /// Row data, which is expected to be a map from column name to value.
   ///
   /// Note that the row is represented as a map to allow selective cells as opposed to
-  /// Vec<serde_json::Value>. Absence is different from setting a column to NULL.
+  /// Vec<SqlValue>. Absence is different from setting a column to NULL.
   pub row: indexmap::IndexMap<String, SqlValue>,
 }
 
