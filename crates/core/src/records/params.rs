@@ -1,6 +1,7 @@
 use log::*;
 use std::collections::HashSet;
 use std::sync::Arc;
+use trailbase_common::SqlValue;
 use trailbase_schema::json::{flat_json_to_value, json_array_to_bytes};
 use trailbase_schema::sqlite::{Column, ColumnDataType};
 use trailbase_schema::{FileUpload, FileUploadInput, FileUploads};
@@ -8,7 +9,6 @@ use trailbase_sqlite::{NamedParams, Value};
 
 use crate::records::RecordApi;
 use crate::schema_metadata::{self, JsonColumnMetadata, TableMetadata};
-use crate::sql_value::SqlValue;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParamsError {
@@ -39,7 +39,7 @@ pub enum ParamsError {
   #[error("ObjectStore error: {0}")]
   Storage(Arc<object_store::Error>),
   #[error("SqlValueDecode: {0}")]
-  SqlValueDecode(#[from] crate::sql_value::DecodeError),
+  SqlValueDecode(#[from] trailbase_common::DecodeError),
 }
 
 impl From<serde_json::Error> for ParamsError {

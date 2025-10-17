@@ -3,17 +3,17 @@ use log::*;
 use serde::Serialize;
 use std::borrow::Cow;
 use std::sync::Arc;
+use trailbase_common::SqlValue;
 use trailbase_qs::{Cursor, CursorType, Order, OrderPrecedent, Query};
 use trailbase_schema::QualifiedName;
 use trailbase_schema::sqlite::{Column, ColumnDataType};
 use ts_rs::TS;
 
 use crate::admin::AdminError as Error;
-use crate::admin::util::{rows_to_flat_json_arrays, rows_to_sql_value_rows};
+use crate::admin::util::rows_to_sql_value_rows;
 use crate::app_state::AppState;
 use crate::listing::{WhereClause, build_filter_where_clause, cursor_to_value, limit_or_default};
 use crate::schema_metadata::{TableMetadata, TableOrViewMetadata};
-use crate::sql_value::SqlValue;
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
@@ -254,9 +254,9 @@ fn parse_cursor(cursor: &str, pk_col: &Column) -> Result<Cursor, Error> {
 #[cfg(test)]
 mod tests {
   use base64::prelude::*;
+  use trailbase_common::Blob;
 
   use super::*;
-  use crate::sql_value::Blob;
   use crate::{admin::rows::list_rows::Pagination, app_state::*, listing::WhereClause};
 
   #[tokio::test]

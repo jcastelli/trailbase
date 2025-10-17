@@ -1,8 +1,7 @@
-use trailbase_schema::json::{JsonError, value_to_flat_json};
+use trailbase_common::SqlValue;
+use trailbase_schema::json::JsonError;
 use trailbase_schema::sqlite::{Column, ColumnAffinityType, ColumnDataType};
 use trailbase_sqlite::{Row, Rows, ValueType};
-
-use crate::sql_value::SqlValue;
 
 /// Best-effort conversion from row values to column definition.
 ///
@@ -31,22 +30,6 @@ pub(crate) fn rows_to_columns(rows: &Rows) -> Vec<Column> {
     .collect();
 }
 
-fn row_to_flat_json_array(row: &Row) -> Result<Vec<serde_json::Value>, JsonError> {
-  return (0..row.column_count())
-    .map(|i| -> Result<serde_json::Value, JsonError> {
-      let value = row.get_value(i).ok_or(JsonError::ValueNotFound)?;
-      return value_to_flat_json(value);
-    })
-    .collect();
-}
-
-#[inline]
-pub(crate) fn rows_to_flat_json_arrays(
-  rows: &Rows,
-) -> Result<Vec<Vec<serde_json::Value>>, JsonError> {
-  return rows.iter().map(row_to_flat_json_array).collect();
-}
-
 fn row_to_sql_value_row(row: &Row) -> Result<Vec<SqlValue>, JsonError> {
   return (0..row.column_count())
     .map(|i| -> Result<SqlValue, JsonError> {
@@ -56,6 +39,7 @@ fn row_to_sql_value_row(row: &Row) -> Result<Vec<SqlValue>, JsonError> {
     .collect();
 }
 
+// TODO: We should use a different error types - no JSON at play here.
 #[inline]
 pub(crate) fn rows_to_sql_value_rows(rows: &Rows) -> Result<Vec<Vec<SqlValue>>, JsonError> {
   return rows.iter().map(row_to_sql_value_row).collect();

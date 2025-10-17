@@ -6,6 +6,6 @@ export type UpdateRowRequest = { primary_key_column: string, primary_key_value: 
  * Row data, which is expected to be a map from column name to value.
  *
  * Note that the row is represented as a map to allow selective cells as opposed to
- * Vec<serde_json::Value>. Absence is different from setting a column to NULL.
+ * Vec<SqlValue>. Absence is different from setting a column to NULL.
  */
 row: { [key in string]?: SqlValue }, };

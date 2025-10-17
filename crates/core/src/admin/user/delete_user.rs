@@ -5,6 +5,7 @@ use axum::{
   response::{IntoResponse, Response},
 };
 use serde::Deserialize;
+use trailbase_common::{Blob, SqlValue};
 use trailbase_schema::QualifiedName;
 use ts_rs::TS;
 
@@ -12,7 +13,6 @@ use crate::admin::AdminError as Error;
 use crate::admin::rows::delete_row;
 use crate::app_state::AppState;
 use crate::auth::util::is_admin;
-use crate::sql_value::{Blob, SqlValue};
 use crate::util::uuid_to_b64;
 
 #[derive(Debug, Deserialize, Default, TS)]

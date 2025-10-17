@@ -1,5 +1,6 @@
 use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
+use trailbase_common::SqlValue;
 use trailbase_schema::parse::parse_into_statements;
 use trailbase_schema::sqlite::Column;
 use ts_rs::TS;
@@ -7,7 +8,6 @@ use ts_rs::TS;
 use crate::AppState;
 use crate::admin::AdminError as Error;
 use crate::admin::util::{rows_to_columns, rows_to_sql_value_rows};
-use crate::sql_value::SqlValue;
 
 #[derive(Debug, Default, Serialize, TS)]
 #[ts(export)]

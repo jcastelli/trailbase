@@ -1,6 +1,7 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
+use trailbase_common::SqlValue;
 use trailbase_schema::{QualifiedName, QualifiedNameEscaped};
 use ts_rs::TS;
 
@@ -8,7 +9,6 @@ use crate::admin::AdminError as Error;
 use crate::app_state::AppState;
 use crate::records::params::Params;
 use crate::records::write_queries::run_update_query;
-use crate::sql_value::SqlValue;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]

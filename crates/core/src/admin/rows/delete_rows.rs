@@ -5,13 +5,13 @@ use axum::{
   response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
+use trailbase_common::SqlValue;
 use trailbase_schema::{QualifiedName, QualifiedNameEscaped};
 use ts_rs::TS;
 
 use crate::admin::AdminError as Error;
 use crate::app_state::AppState;
 use crate::records::write_queries::run_delete_query;
-use crate::sql_value::SqlValue;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -108,6 +108,7 @@ pub async fn delete_rows_handler(
 mod tests {
   use axum::extract::{Json, Path, RawQuery, State};
   use serde::Deserialize;
+  use trailbase_common::Blob;
   use trailbase_schema::sqlite::{Column, ColumnAffinityType, ColumnDataType, ColumnOption, Table};
   use uuid::Uuid;
 
@@ -117,7 +118,6 @@ mod tests {
   use crate::admin::rows::update_row::{UpdateRowRequest, update_row_handler};
   use crate::admin::table::{CreateTableRequest, create_table_handler};
   use crate::app_state::*;
-  use crate::sql_value::Blob;
   use crate::util::uuid_to_b64;
 
   // TODO: This full-lifecycle test should probably live outside the scope of delete_row.
