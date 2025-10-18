@@ -5,9 +5,18 @@ import { type FieldApi, createForm } from "@tanstack/solid-form";
 import { TbEye } from "solid-icons/tb";
 import { urlSafeBase64Decode } from "trailbase";
 
-import { cn, tryParseInt, tryParseFloat } from "@/lib/utils";
-import { isNullableColumn, isReal, isInt } from "@/lib/schema";
+import { cn, tryParseInt, tryParseFloat, tryParseBigInt } from "@/lib/utils";
+import { isNullableColumn } from "@/lib/schema";
 import { literalDefault } from "@/lib/convert";
+import type {
+  SqlRealValue,
+  SqlIntegerValue,
+  SqlTextValue,
+  SqlBlobValue,
+  SqlValue,
+  Blob,
+} from "@/lib/value";
+import { sqlValueToString } from "@/lib/value";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,12 +71,10 @@ type TextFieldOptions = {
   placeholder?: string;
 };
 
-/// Note that we make not-required/optional explicit by having a checkbox, since there's
-/// a difference between empty string and not set.
-function buildTextFormFieldT<T extends string | null>(opts: TextFieldOptions) {
+export function buildTextFormField(opts: TextFieldOptions) {
   const externDisable = opts.disabled ?? false;
 
-  function builder(field: () => FieldApiT<T>) {
+  return function builder(field: () => FieldApiT<string>) {
     return (
       <TextField class="w-full">
         <div
@@ -86,7 +93,7 @@ function buildTextFormFieldT<T extends string | null>(opts: TextFieldOptions) {
             autocorrect={opts.type === "password" ? "off" : undefined}
             onInput={(e: Event) => {
               const value: string = (e.target as HTMLInputElement).value;
-              field().handleChange(value as T);
+              field().handleChange(value as string);
             }}
             data-testid="input"
           />
@@ -97,18 +104,12 @@ function buildTextFormFieldT<T extends string | null>(opts: TextFieldOptions) {
         </div>
       </TextField>
     );
-  }
-
-  return builder;
-}
-
-export function buildTextFormField(opts: TextFieldOptions) {
-  return buildTextFormFieldT<string>(opts);
+  };
 }
 
 /// Used for Settings. Empty field is the same as absent.
 export function buildOptionalTextFormField(opts: TextFieldOptions) {
-  return function (field: () => FieldApiT<string | undefined>) {
+  return function builder(field: () => FieldApiT<string | undefined>) {
     return (
       <TextField class="w-full">
         <div
@@ -144,7 +145,7 @@ export function buildOptionalTextFormField(opts: TextFieldOptions) {
 export function buildNullableTextFormField(opts: TextFieldOptions) {
   const externDisable = opts.disabled ?? false;
 
-  return function (field: () => FieldApiT<string | null | undefined>) {
+  return function builder(field: () => FieldApiT<string | null | undefined>) {
     const initialValue: string | null | undefined = field().state.value;
     const [enabled, setEnabled] = createSignal<boolean>(
       !externDisable && initialValue !== null && initialValue !== undefined,
@@ -208,44 +209,46 @@ export function buildSecretFormField(
 ) {
   const [type, setType] = createSignal<TextFieldType>("password");
 
-  return (field: () => FieldApiT<string>) => (
-    <TextField class="w-full">
-      <div
-        class={cn("grid items-center", gapStyle)}
-        style={{ "grid-template-columns": "auto 1fr" }}
-      >
-        <TextFieldLabel>{opts.label()}</TextFieldLabel>
+  return function builder(field: () => FieldApiT<string>) {
+    return (
+      <TextField class="w-full">
+        <div
+          class={cn("grid items-center", gapStyle)}
+          style={{ "grid-template-columns": "auto 1fr" }}
+        >
+          <TextFieldLabel>{opts.label()}</TextFieldLabel>
 
-        <div class="flex items-center gap-2">
-          <TextFieldInput
-            disabled={opts.disabled ?? false}
-            type={type()}
-            value={field().state.value}
-            onBlur={field().handleBlur}
-            autocomplete={"off"}
-            autocorrect="off"
-            onInput={(e: Event) => {
-              field().handleChange((e.target as HTMLInputElement).value);
-            }}
-          />
+          <div class="flex items-center gap-2">
+            <TextFieldInput
+              disabled={opts.disabled ?? false}
+              type={type()}
+              value={field().state.value}
+              onBlur={field().handleBlur}
+              autocomplete={"off"}
+              autocorrect="off"
+              onInput={(e: Event) => {
+                field().handleChange((e.target as HTMLInputElement).value);
+              }}
+            />
 
-          <Button
-            disabled={opts.disabled}
-            variant={type() === "text" ? "default" : "outline"}
-            onClick={() => {
-              setType(type() === "password" ? "text" : "password");
-            }}
-          >
-            <TbEye size={18} />
-          </Button>
+            <Button
+              disabled={opts.disabled}
+              variant={type() === "text" ? "default" : "outline"}
+              onClick={() => {
+                setType(type() === "password" ? "text" : "password");
+              }}
+            >
+              <TbEye size={18} />
+            </Button>
+          </div>
+
+          <GridFieldInfo field={field()} />
+
+          <InfoColumn info={opts.info} />
         </div>
-
-        <GridFieldInfo field={field()} />
-
-        <InfoColumn info={opts.info} />
-      </div>
-    </TextField>
-  );
+      </TextField>
+    );
+  };
 }
 
 export function buildOptionalTextAreaFormField(
@@ -253,7 +256,7 @@ export function buildOptionalTextAreaFormField(
   // Height in number of lines of the text area.
   rows?: number,
 ) {
-  return (field: () => FieldApiT<string | undefined>) => {
+  return function builder(field: () => FieldApiT<string | undefined>) {
     return (
       <TextField class="w-full">
         <div
@@ -295,7 +298,7 @@ type NumberFieldOptions = {
 
 /// Used for Settings. Empty field is the same as absent.
 export function buildOptionalNumberFormField(opts: NumberFieldOptions) {
-  return function (field: () => FieldApiT<number | undefined>) {
+  return function builder(field: () => FieldApiT<number | undefined>) {
     const isInt = opts.integer ?? false;
 
     return (
@@ -331,24 +334,49 @@ export function buildOptionalNumberFormField(opts: NumberFieldOptions) {
   };
 }
 
-/// Used for record forms. Has a checkbox to distinguish absent from empty string.
-function buildNullableNumberFormField(opts: NumberFieldOptions) {
+export function buildBoolFormField(props: { label: () => JSX.Element }) {
+  return function builder(field: () => FieldApiT<boolean>) {
+    return (
+      <div class="flex w-full justify-end gap-4">
+        <Label class="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+          {props.label()}
+        </Label>
+
+        <Checkbox
+          checked={field().state.value}
+          onBlur={field().handleBlur}
+          onChange={field().handleChange}
+        />
+      </div>
+    );
+  };
+}
+
+type SqlFormFieldOptions = {
+  label: () => JSX.Element;
+  disabled?: boolean;
+  placeholder?: string;
+  nullable?: boolean;
+};
+
+function buildSqlRealFormField(opts: SqlFormFieldOptions) {
   const externDisable = opts.disabled ?? false;
 
-  return function builder(field: () => FieldApiT<number | null | undefined>) {
-    const isInt = opts.integer ?? false;
-    const initialValue = field().state.value;
+  return function builder(field: () => FieldApiT<SqlRealValue | null>) {
+    const initialValue: SqlRealValue | null = field().state.value;
     const [enabled, setEnabled] = createSignal<boolean>(
-      !externDisable && initialValue !== undefined && initialValue !== null,
+      !externDisable && initialValue !== null,
     );
-
-    const value = () => (enabled() ? field().state.value : null);
-    const placeholder = () => {
-      if (!enabled()) return "NULL";
-
-      const value = field().state.value;
-      return value || opts.placeholder;
+    const placeholder = (): string | undefined => {
+      if (enabled()) {
+        const value = field().state.value?.Real;
+        return value?.toString() ?? opts.placeholder;
+      }
+      return "NULL";
     };
+
+    const value = (): number | null =>
+      enabled() ? (field().state.value?.Real ?? null) : null;
 
     return (
       <TextField class="w-full">
@@ -358,86 +386,378 @@ function buildNullableNumberFormField(opts: NumberFieldOptions) {
         >
           <TextFieldLabel>{opts.label()}</TextFieldLabel>
 
-          <div class="flex items-center">
+          <div class="flex items-center gap-2">
+            {/* TODO: should this be type="number"? */}
             <TextFieldInput
               disabled={!enabled()}
-              type={isInt && enabled() ? "number" : "text"}
-              required={opts.required}
-              step={isInt ? "1" : undefined}
-              pattern={isInt ? "d+" : "[0-9]*[.,]?[0-9]*"}
+              type={enabled() ? "text" : "text"}
+              pattern="[0-9]*[.,]?[0-9]*"
               value={value() ?? ""}
               placeholder={placeholder() ?? ""}
               onBlur={field().handleBlur}
               onInput={(e: Event) => {
                 const value = (e.target as HTMLInputElement).value;
-                const parsed = isInt
-                  ? tryParseInt(value)
-                  : tryParseFloat(value);
-                field().handleChange(parsed ?? null);
+                const parsed = tryParseFloat(value);
+                field().handleChange(parsed ? { Real: parsed } : null);
               }}
             />
 
-            <Checkbox
-              disabled={externDisable}
-              checked={enabled()}
-              onChange={(enabled: boolean) => {
-                setEnabled(enabled);
-                // NOTE: null is critical here to actively unset a cell, undefined
-                // would merely take it out of the patch set.
-                const value = enabled ? (initialValue ?? null) : null;
-                field().handleChange(value);
-              }}
-              data-testid="toggle"
-            />
+            {(opts.nullable ?? true) && (
+              <Checkbox
+                disabled={externDisable}
+                checked={enabled()}
+                onChange={(enabled: boolean) => {
+                  setEnabled(enabled);
+                  // NOTE: null is critical here to actively unset a cell, undefined
+                  // would merely take it out of the patch set.
+                  const value = enabled ? (initialValue ?? null) : null;
+                  field().handleChange(value);
+                }}
+                data-testid="toggle"
+              />
+            )}
           </div>
 
           <GridFieldInfo field={field()} />
-
-          <InfoColumn info={opts.info} />
         </div>
       </TextField>
     );
   };
 }
 
-export function buildBoolFormField(props: { label: () => JSX.Element }) {
-  return (field: () => FieldApiT<boolean>) => (
-    <div class="flex w-full justify-end gap-4">
-      <Label class="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-        {props.label()}
-      </Label>
+function buildSqlIntegerFormField(opts: SqlFormFieldOptions) {
+  const externDisable = opts.disabled ?? false;
 
-      <Checkbox
-        checked={field().state.value}
-        onBlur={field().handleBlur}
-        onChange={field().handleChange}
-      />
-    </div>
-  );
+  return function builder(field: () => FieldApiT<SqlIntegerValue | null>) {
+    const initialValue: SqlIntegerValue | null = field().state.value;
+    const [enabled, setEnabled] = createSignal<boolean>(
+      !externDisable && initialValue !== null,
+    );
+    const placeholder = (): string | undefined => {
+      if (enabled()) {
+        const value = field().state.value?.Integer;
+        return value?.toString() ?? opts.placeholder;
+      }
+      return "NULL";
+    };
+
+    const value = (): bigint | null =>
+      enabled() ? (field().state.value?.Integer ?? null) : null;
+
+    return (
+      <TextField class="w-full">
+        <div
+          class={`grid items-center ${gapStyle}`}
+          style={{ "grid-template-columns": "auto 1fr" }}
+        >
+          <TextFieldLabel>{opts.label()}</TextFieldLabel>
+
+          <div class="flex items-center gap-2">
+            <TextFieldInput
+              disabled={!enabled()}
+              type={enabled() ? "number" : "text"}
+              step={1}
+              pattern={"d+"}
+              value={value() ?? ""}
+              placeholder={placeholder() ?? ""}
+              onBlur={field().handleBlur}
+              onInput={(e: Event) => {
+                const value = (e.target as HTMLInputElement).value;
+                const parsed = tryParseBigInt(value);
+                field().handleChange(
+                  parsed !== undefined ? { Integer: parsed } : null,
+                );
+              }}
+            />
+
+            {(opts.nullable ?? true) && (
+              <Checkbox
+                disabled={externDisable}
+                checked={enabled()}
+                onChange={(enabled: boolean) => {
+                  setEnabled(enabled);
+                  // NOTE: null is critical here to actively unset a cell, undefined
+                  // would merely take it out of the patch set.
+                  const value = enabled ? (initialValue ?? null) : null;
+                  field().handleChange(value);
+                }}
+                data-testid="toggle"
+              />
+            )}
+          </div>
+
+          <GridFieldInfo field={field()} />
+        </div>
+      </TextField>
+    );
+  };
+}
+
+function buildSqlTextFormField(opts: SqlFormFieldOptions) {
+  const externDisable = opts.disabled ?? false;
+
+  return function(field: () => FieldApiT<SqlTextValue | null>) {
+    const initialValue: SqlTextValue | null = field().state.value;
+    const [enabled, setEnabled] = createSignal<boolean>(
+      !externDisable && initialValue !== null && initialValue !== undefined,
+    );
+    const placeholder = (): string | undefined => {
+      if (enabled()) {
+        return field().state.value?.Text ?? opts.placeholder;
+      }
+      return "NULL";
+    };
+
+    const value = (): string | null =>
+      enabled() ? (field().state.value?.Text ?? null) : null;
+
+    return (
+      <TextField class="w-full">
+        <div
+          class={cn("grid items-center", gapStyle)}
+          style={{ "grid-template-columns": "auto 1fr" }}
+        >
+          <TextFieldLabel>{opts.label()}</TextFieldLabel>
+
+          <div class="flex items-center gap-2">
+            <TextFieldInput
+              disabled={!enabled()}
+              type={"text"}
+              value={value()}
+              placeholder={placeholder()}
+              onBlur={field().handleBlur}
+              onInput={(e: Event) => {
+                const value: string | undefined = (e.target as HTMLInputElement)
+                  .value;
+                field().handleChange(
+                  value !== undefined
+                    ? {
+                      Text: value,
+                    }
+                    : null,
+                );
+              }}
+              data-testid="input"
+            />
+
+            {(opts.nullable ?? true) && (
+              <Checkbox
+                disabled={externDisable}
+                checked={enabled()}
+                onChange={(enabled: boolean) => {
+                  setEnabled(enabled);
+                  // NOTE: null is critical here to actively unset a cell, undefined
+                  // would merely take it out of the patch set.
+                  const value = enabled ? (initialValue ?? null) : null;
+                  field().handleChange(value);
+                }}
+                data-testid="toggle"
+              />
+            )}
+          </div>
+
+          <GridFieldInfo field={field()} />
+        </div>
+      </TextField>
+    );
+  };
+}
+
+function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
+  const externDisable = opts.disabled ?? false;
+
+  function toString(blob: Blob): string {
+    if ("Base64UrlSafe" in blob) {
+      return blob.Base64UrlSafe;
+    }
+    throw Error("Expected Base64UrlSafe");
+  }
+
+  return function(field: () => FieldApiT<SqlBlobValue | null>) {
+    const initialValue: SqlBlobValue | null = field().state.value;
+    const [enabled, setEnabled] = createSignal<boolean>(
+      !externDisable && initialValue !== null && initialValue !== undefined,
+    );
+    const placeholder = (): string | undefined => {
+      if (!enabled()) {
+        return "NULL";
+      }
+
+      const blob = field().state.value?.Blob;
+      if (blob !== undefined) {
+        return toString(blob);
+      }
+      return opts.placeholder;
+    };
+
+    const value = (): string | null => {
+      if (enabled()) {
+        const blob = field().state.value?.Blob;
+        if (blob !== undefined) {
+          return toString(blob);
+        }
+      }
+      return null;
+    };
+
+    return (
+      <TextField class="w-full">
+        <div
+          class={cn("grid items-center", gapStyle)}
+          style={{ "grid-template-columns": "auto 1fr" }}
+        >
+          <TextFieldLabel>{opts.label()}</TextFieldLabel>
+
+          <div class="flex items-center gap-2">
+            <TextFieldInput
+              disabled={!enabled()}
+              type={"text"}
+              value={value()}
+              placeholder={placeholder()}
+              onBlur={field().handleBlur}
+              onInput={(e: Event) => {
+                const value: string | undefined = (e.target as HTMLInputElement)
+                  .value;
+                field().handleChange(
+                  value !== undefined
+                    ? {
+                      Blob: {
+                        Base64UrlSafe: value,
+                      },
+                    }
+                    : null,
+                );
+              }}
+              data-testid="input"
+            />
+
+            {(opts.nullable ?? true) && (
+              <Checkbox
+                disabled={externDisable}
+                checked={enabled()}
+                onChange={(enabled: boolean) => {
+                  setEnabled(enabled);
+                  // NOTE: null is critical here to actively unset a cell, undefined
+                  // would merely take it out of the patch set.
+                  const value = enabled ? (initialValue ?? null) : null;
+                  field().handleChange(value);
+                }}
+                data-testid="toggle"
+              />
+            )}
+          </div>
+
+          <GridFieldInfo field={field()} />
+        </div>
+      </TextField>
+    );
+  };
+}
+
+function buildSqlAnyFormField(opts: SqlFormFieldOptions) {
+  const externDisable = opts.disabled ?? false;
+
+  return function(field: () => FieldApiT<SqlValue | null>) {
+    const initialValue: SqlValue | null = field().state.value;
+    const [enabled, setEnabled] = createSignal<boolean>(
+      !externDisable && initialValue !== null && initialValue !== undefined,
+    );
+    const placeholder = (): string | undefined => {
+      if (!enabled()) {
+        return "NULL";
+      }
+
+      const value = field().state.value;
+      return value !== null ? sqlValueToString(value) : opts.placeholder;
+    };
+
+    const value = (): string | null => {
+      if (enabled()) {
+        const value = field().state.value;
+        if (value !== null) {
+          return sqlValueToString(value);
+        }
+      }
+      return null;
+    };
+
+    return (
+      <TextField class="w-full">
+        <div
+          class={cn("grid items-center", gapStyle)}
+          style={{ "grid-template-columns": "auto 1fr" }}
+        >
+          <TextFieldLabel>{opts.label()}</TextFieldLabel>
+
+          <div class="flex items-center gap-2">
+            <TextFieldInput
+              disabled={!enabled()}
+              type={"text"}
+              value={value()}
+              placeholder={placeholder()}
+              onBlur={field().handleBlur}
+              onInput={(e: Event) => {
+                const value: string | undefined = (e.target as HTMLInputElement)
+                  .value;
+                // TODO: Do we need to be smarter here?
+                field().handleChange(
+                  value !== undefined
+                    ? {
+                      Text: value,
+                    }
+                    : null,
+                );
+              }}
+              data-testid="input"
+            />
+
+            {(opts.nullable ?? true) && (
+              <Checkbox
+                disabled={externDisable}
+                checked={enabled()}
+                onChange={(enabled: boolean) => {
+                  setEnabled(enabled);
+                  // NOTE: null is critical here to actively unset a cell, undefined
+                  // would merely take it out of the patch set.
+                  const value = enabled ? (initialValue ?? null) : null;
+                  field().handleChange(value);
+                }}
+                data-testid="toggle"
+              />
+            )}
+          </div>
+
+          <GridFieldInfo field={field()} />
+        </div>
+      </TextField>
+    );
+  };
 }
 
 export function buildOptionalBoolFormField(opts: {
   label: () => JSX.Element;
   info?: JSX.Element;
 }) {
-  return (field: () => FieldApiT<boolean | undefined>) => (
-    <div
-      class={`grid items-center ${gapStyle}`}
-      style={{ "grid-template-columns": "auto 1fr" }}
-    >
-      <Label class="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-        {opts.label()}
-      </Label>
+  return function builder(field: () => FieldApiT<boolean | undefined>) {
+    return (
+      <div
+        class={`grid items-center ${gapStyle}`}
+        style={{ "grid-template-columns": "auto 1fr" }}
+      >
+        <Label class="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+          {opts.label()}
+        </Label>
 
-      <Checkbox
-        checked={field().state.value}
-        onBlur={field().handleBlur}
-        onChange={field().handleChange}
-      />
+        <Checkbox
+          checked={field().state.value}
+          onBlur={field().handleBlur}
+          onChange={field().handleChange}
+        />
 
-      <InfoColumn info={opts.info} />
-    </div>
-  );
+        <InfoColumn info={opts.info} />
+      </div>
+    );
+  };
 }
 
 interface SelectFieldOpts {
@@ -446,7 +766,7 @@ interface SelectFieldOpts {
 }
 
 export function buildSelectField(options: string[], opts: SelectFieldOpts) {
-  return (field: () => FieldApiT<string>) => {
+  return function builder(field: () => FieldApiT<string>) {
     return (
       <SelectField
         label={opts.label}
@@ -613,16 +933,25 @@ export function buildDBCellField(opts: {
   isUpdate: boolean;
   defaultValue: string | undefined;
 }): (field: () => FieldApiT<any>) => JSX.Element {
-  const typeLabel = () => `[${opts.type}${opts.notNull ? "" : "?"}]`;
+  const type = opts.type;
+  const notNull = opts.notNull;
 
+  const disabled = opts.isUpdate && opts.isPk;
+  const nullable = isNullableColumn({
+    type,
+    notNull: notNull,
+    isPk: opts.isPk,
+  });
+
+  const typeLabel = `[${type}${notNull && "?"}]`;
   const label = () => (
     <div class="flex w-[100px] flex-wrap items-center gap-1 overflow-hidden">
       <span>{opts.name} </span>
 
-      <Show when={opts.type === "Blob"} fallback={typeLabel()}>
+      <Show when={type === "Blob"} fallback={typeLabel}>
         <Tooltip>
           <TooltipTrigger as="div">
-            <span class="text-primary">{typeLabel()}</span>
+            <span class="text-primary">{typeLabel}</span>
           </TooltipTrigger>
 
           <TooltipContent>
@@ -633,13 +962,7 @@ export function buildDBCellField(opts: {
     </div>
   );
 
-  const type = opts.type;
-  const nullable = isNullableColumn({
-    type,
-    notNull: opts.notNull,
-    isPk: opts.isPk,
-  });
-  const placeholder: string | undefined = (() => {
+  function placeholder(): string | undefined {
     // Placeholders indicate default values. However, default values only apply
     // on first insert.
     if (opts.isUpdate) {
@@ -663,48 +986,47 @@ export function buildDBCellField(opts: {
       }
       return literal.toString();
     }
-  })();
-  const disabled = opts.isUpdate && opts.isPk;
-
-  if (type === "Text" || type === "Blob") {
-    if (nullable) {
-      return buildNullableTextFormField({ label, placeholder, disabled });
-    }
-    return buildTextFormFieldT<string | null>({
-      label,
-      placeholder,
-      disabled,
-    });
   }
 
-  if (isInt(type)) {
-    return buildNullableNumberFormField({
-      label,
-      disabled,
-      integer: true,
-      // required: (!nullable && opts.defaultValue === undefined),
-      placeholder,
-    });
+  switch (type) {
+    case "Integer":
+      // TODO: Handle non-nullable case.
+      return buildSqlIntegerFormField({
+        label,
+        disabled,
+        nullable,
+        placeholder: placeholder(),
+      });
+    case "Real":
+      // TODO: Handle non-nullable case.
+      return buildSqlRealFormField({
+        label,
+        disabled,
+        nullable,
+        placeholder: placeholder(),
+      });
+    case "Text":
+      return buildSqlTextFormField({
+        label,
+        disabled,
+        nullable,
+        placeholder: placeholder(),
+      });
+    case "Blob":
+      return buildSqlBlobFormField({
+        label,
+        disabled,
+        nullable,
+        placeholder: placeholder(),
+      });
+    case "Any":
+      return buildSqlAnyFormField({
+        label,
+        disabled,
+        nullable,
+        placeholder: placeholder(),
+      });
   }
-
-  if (isReal(type)) {
-    return buildNullableNumberFormField({
-      label,
-      disabled,
-      integer: false,
-      // required: (!nullable && opts.defaultValue === undefined),
-      placeholder,
-    });
-  }
-
-  console.debug(
-    `Custom FormFields not implemented for '${type}'. Falling back to text field`,
-  );
-
-  if (nullable) {
-    return buildNullableTextFormField({ label, placeholder, disabled });
-  }
-  return buildTextFormFieldT<string | null>({ label, placeholder, disabled });
 }
 
 export const gapStyle = "gap-x-2 gap-y-1";

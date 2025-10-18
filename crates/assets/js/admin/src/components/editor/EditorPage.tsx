@@ -62,7 +62,7 @@ import type { SqlValue } from "@bindings/SqlValue";
 import { createTableSchemaQuery } from "@/lib/table";
 import { executeSql, type ExecutionResult } from "@/lib/fetch";
 import { isNotNull } from "@/lib/schema";
-import { sqlValueToString } from "@/lib/convert";
+import { sqlValueToString } from "@/lib/value";
 import type { Row2Data } from "@/lib/convert";
 
 function buildSchema(schemas: ListSchemasResponse): SQLNamespace {

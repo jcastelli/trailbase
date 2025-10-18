@@ -28,6 +28,14 @@ export function tryParseInt(value: string): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
+export function tryParseBigInt(value: string): bigint | undefined {
+  try {
+    return BigInt(value);
+  } catch {
+    return undefined;
+  }
+}
+
 export function tryParseFloat(value: string): number | undefined {
   const n = parseFloat(value);
   return isNaN(n) ? undefined : n;

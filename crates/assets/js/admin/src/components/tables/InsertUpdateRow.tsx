@@ -12,11 +12,12 @@ import { getDefaultValue, isNotNull, isPrimaryKeyColumn } from "@/lib/schema";
 import { SheetContainer } from "@/components/SafeSheet";
 import { showToast } from "@/components/ui/toast";
 import {
-  copyRow2,
-  preProcessInsertValue,
-  preProcessUpdateValue,
   buildDefaultRow,
+  copyRow2,
+  // preProcessInsertValue,
+  // preProcessUpdateValue,
 } from "@/lib/convert";
+import type { SqlValue } from "@/lib/value";
 import type { FormRow2 } from "@/lib/convert";
 import { updateRow, insertRow } from "@/lib/row";
 
@@ -92,17 +93,14 @@ export function InsertUpdateRowForm(props: {
                 <form.Field
                   name={`row[${col.name}]`}
                   validators={{
-                    onChange: ({
-                      value,
-                    }: {
-                      value: string | number | null;
-                    }) => {
+                    onChange: ({ value: _ }: { value: SqlValue }) => {
                       try {
-                        if (isUpdate()) {
-                          preProcessUpdateValue(col, value);
-                        } else {
-                          preProcessInsertValue(col, value);
-                        }
+                        // FIXME: Needs to be removed or upated for SqlValue (previously: null | string | number).
+                        // if (isUpdate()) {
+                        //   preProcessUpdateValue(col, value);
+                        // } else {
+                        //   preProcessInsertValue(col, value);
+                        // }
                       } catch (e) {
                         return `Invalid value for ${col.name}: ${e}`;
                       }

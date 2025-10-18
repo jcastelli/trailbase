@@ -12,11 +12,10 @@ import {
   isInt,
   isReal,
 } from "@/lib/schema";
+import type { SqlValue } from "@/lib/value";
 
-import type { Blob } from "@bindings/Blob";
 import type { Column } from "@bindings/Column";
 import type { ColumnDataType } from "@bindings/ColumnDataType";
-import type { SqlValue } from "@bindings/SqlValue";
 import type { Table } from "@bindings/Table";
 
 // NOTE: We use a simpler type here over `Object`, `JsonValue` or other recursive
@@ -44,30 +43,6 @@ export function castToInteger(value: SqlValue): bigint {
     return value.Integer;
   }
   throw Error(`Expected integer, got: ${value}`);
-}
-
-export function sqlValueToString(value: SqlValue): string {
-  if (value === null || value === "Null") {
-    return "NULL";
-  }
-
-  if ("Integer" in value) {
-    return value.Integer.toString();
-  }
-
-  if ("Real" in value) {
-    return value.Real.toString();
-  }
-
-  if ("Blob" in value) {
-    const blob: Blob = value.Blob;
-    if ("Base64UrlSafe" in blob) {
-      return blob.Base64UrlSafe;
-    }
-    throw Error("Expected Base64UrlSafe");
-  }
-
-  return value.Text;
 }
 
 // TODO: Remove when everything is converted to Row2 format.
@@ -382,7 +357,7 @@ export function buildDefaultRow(schema: Table): FormRow2 {
     } else if (isReal(type)) {
       obj[col.name] = { Real: 0.0 };
     } else {
-      console.warn(`No fallback for ${type} column: ${col.name}`);
+      console.warn(`No fallback for column: ${col.name}, type: '${type}' - skipping default`);
     }
   }
   return obj;
