@@ -1,6 +1,6 @@
-import { urlSafeBase64Decode, urlSafeBase64Encode } from "trailbase";
+import { urlSafeBase64Encode } from "trailbase";
 
-import { tryParseInt, tryParseFloat } from "@/lib/utils";
+import { tryParseFloat, tryParseBigInt } from "@/lib/utils";
 import {
   unescapeLiteral,
   unescapeLiteralBlob,
@@ -14,7 +14,7 @@ import {
 } from "@/lib/schema";
 import type { SqlValue } from "@/lib/value";
 
-import type { Column } from "@bindings/Column";
+// import type { Column } from "@bindings/Column";
 import type { ColumnDataType } from "@bindings/ColumnDataType";
 import type { Table } from "@bindings/Table";
 
@@ -24,15 +24,16 @@ import type { Table } from "@bindings/Table";
 //
 // There's a stark difference between null and undefined, the former is an
 // explicit database value and the latter will be skipped in updates.
-export type RowValue = string | number | boolean | null;
+// export type RowValue = string | number | boolean | null;
 
 // A record representation of a single row keyed by column name.
-export type FormRow = { [key: string]: RowValue };
+// export type FormRow = { [key: string]: RowValue };
 
 // An array representation of a single row.
-export type RowData = RowValue[];
+// export type RowData = RowValue[];
 
 // A record representation of a single row keyed by column name.
+// TODO: Is the undefined needed?
 export type FormRow2 = { [key: string]: SqlValue | undefined };
 
 // An array representation of a single row.
@@ -91,7 +92,7 @@ export function hashSqlValue(value: SqlValue): string {
 export function literalDefault(
   type: ColumnDataType,
   value: string | undefined,
-): RowValue | undefined {
+): string | bigint | number | undefined {
   // Non literal if missing or function call, e.g. '(fun([col]))'.
   if (value === undefined || value.startsWith("(")) {
     return undefined;
@@ -105,7 +106,7 @@ export function literalDefault(
     // e.g. 'bar'.
     return unescapeLiteral(value);
   } else if (isInt(type)) {
-    return tryParseInt(value);
+    return tryParseBigInt(value);
   } else if (isReal(type)) {
     return tryParseFloat(value);
   }
@@ -114,203 +115,211 @@ export function literalDefault(
 }
 
 // NOTE: this is also validation.
-export function preProcessInsertValue(
-  col: Column,
-  value: RowValue | undefined,
-): RowValue | undefined {
-  const type = col.data_type;
-  const isPk = isPrimaryKeyColumn(col);
-  const notNull = isNotNull(col.options);
-  const defaultValue = getDefaultValue(col.options);
-
-  const nullable = isNullableColumn({
-    type: col.data_type,
-    notNull,
-    isPk,
-  });
-
-  if (value === undefined || value === null) {
-    if (nullable) {
-      // NOTE: this may return undefined or null, which are explicitly different.
-      return value;
-    }
-
-    if (defaultValue !== undefined) {
-      return undefined;
-    }
-
-    throw Error(`Missing value for: ${col.name}`);
-  }
-
-  if (type === "Blob") {
-    if (typeof value === "string") {
-      if (value === "") {
-        if (nullable || defaultValue !== undefined) {
-          return undefined;
-        }
-      }
-
-      try {
-        urlSafeBase64Decode(value);
-      } catch {
-        throw new Error("Url-safe base64 decoding error");
-      }
-
-      return value;
-    }
-
-    throw Error(`Unexpected blob value for: ${col.name}: ${value}`);
-  } else if (type === "Text") {
-    if (typeof value === "string") {
-      return value;
-    }
-
-    throw Error(`Unexpected string value for: ${col.name}: ${value}`);
-  } else if (isInt(type)) {
-    if (typeof value === "string") {
-      if (value === "") {
-        if (defaultValue !== undefined) {
-          return undefined;
-        }
-      }
-
-      const number = tryParseInt(value);
-      if (number === undefined) {
-        throw Error(`Unexpected int value for: ${col.name}: ${value}`);
-      }
-      return number;
-    } else if (typeof value === "number") {
-      return value;
-    }
-
-    throw Error(`Unexpected int value for: ${col.name}: ${value}`);
-  } else if (isReal(type)) {
-    if (typeof value === "string") {
-      if (value === "") {
-        if (defaultValue !== undefined) {
-          return undefined;
-        }
-      }
-
-      const number = tryParseFloat(value);
-      if (number === undefined) {
-        throw Error(`Unexpected real value for: ${col.name}: ${value}`);
-      }
-      return number;
-    } else if (typeof value === "number") {
-      return value;
-    }
-
-    throw Error(`Unexpected real value for: ${col.name}: ${value}`);
-  }
-
-  return value;
-}
+// export function preProcessInsertValue(
+//   col: Column,
+//   value: RowValue | undefined,
+// ): RowValue | undefined {
+//   const type = col.data_type;
+//   const isPk = isPrimaryKeyColumn(col);
+//   const notNull = isNotNull(col.options);
+//   const defaultValue = getDefaultValue(col.options);
+//
+//   const nullable = isNullableColumn({
+//     type: col.data_type,
+//     notNull,
+//     isPk,
+//   });
+//
+//   if (value === undefined || value === null) {
+//     if (nullable) {
+//       // NOTE: this may return undefined or null, which are explicitly different.
+//       return value;
+//     }
+//
+//     if (defaultValue !== undefined) {
+//       return undefined;
+//     }
+//
+//     throw Error(`Missing value for: ${col.name}`);
+//   }
+//
+//   if (type === "Blob") {
+//     if (typeof value === "string") {
+//       if (value === "") {
+//         if (nullable || defaultValue !== undefined) {
+//           return undefined;
+//         }
+//       }
+//
+//       try {
+//         urlSafeBase64Decode(value);
+//       } catch {
+//         throw new Error("Url-safe base64 decoding error");
+//       }
+//
+//       return value;
+//     }
+//
+//     throw Error(`Unexpected blob value for: ${col.name}: ${value}`);
+//   } else if (type === "Text") {
+//     if (typeof value === "string") {
+//       return value;
+//     }
+//
+//     throw Error(`Unexpected string value for: ${col.name}: ${value}`);
+//   } else if (isInt(type)) {
+//     if (typeof value === "string") {
+//       if (value === "") {
+//         if (defaultValue !== undefined) {
+//           return undefined;
+//         }
+//       }
+//
+//       const number = tryParseInt(value);
+//       if (number === undefined) {
+//         throw Error(`Unexpected int value for: ${col.name}: ${value}`);
+//       }
+//       return number;
+//     } else if (typeof value === "number") {
+//       return value;
+//     }
+//
+//     throw Error(`Unexpected int value for: ${col.name}: ${value}`);
+//   } else if (isReal(type)) {
+//     if (typeof value === "string") {
+//       if (value === "") {
+//         if (defaultValue !== undefined) {
+//           return undefined;
+//         }
+//       }
+//
+//       const number = tryParseFloat(value);
+//       if (number === undefined) {
+//         throw Error(`Unexpected real value for: ${col.name}: ${value}`);
+//       }
+//       return number;
+//     } else if (typeof value === "number") {
+//       return value;
+//     }
+//
+//     throw Error(`Unexpected real value for: ${col.name}: ${value}`);
+//   }
+//
+//   return value;
+// }
 
 /// Updates and inserts are different with inserts not being able to tap into
 /// default values.
 ///
 /// NOTE: this is also validation.
-export function preProcessUpdateValue(
-  col: Column,
-  value: RowValue | undefined,
-): RowValue | undefined {
-  const type = col.data_type;
-  const isPk = isPrimaryKeyColumn(col);
-  const notNull = isNotNull(col.options);
+// export function preProcessUpdateValue(
+//   col: Column,
+//   value: RowValue | undefined,
+// ): RowValue | undefined {
+//   const type = col.data_type;
+//   const isPk = isPrimaryKeyColumn(col);
+//   const notNull = isNotNull(col.options);
+//
+//   if (value === undefined) {
+//     throw Error(`Missing value for: ${col.name}`);
+//   }
+//
+//   const nullable = isNullableColumn({
+//     type: col.data_type,
+//     notNull,
+//     isPk,
+//   });
+//
+//   if (value === null && nullable) {
+//     return null;
+//   }
+//
+//   if (type === "Blob") {
+//     if (typeof value === "string") {
+//       if (value === "") {
+//         if (nullable) {
+//           return undefined;
+//         }
+//       }
+//
+//       try {
+//         urlSafeBase64Decode(value);
+//       } catch {
+//         throw new Error("Url-safe base64 decoding error");
+//       }
+//
+//       return value;
+//     }
+//
+//     throw Error(`Unexpected blob value for: ${col.name}: ${value}`);
+//   } else if (type === "Text") {
+//     if (typeof value === "string") {
+//       return value;
+//     }
+//
+//     throw Error(`Unexpected string value for: ${col.name}: ${value}`);
+//   } else if (isInt(type)) {
+//     if (typeof value === "string") {
+//       const number = tryParseInt(value);
+//       if (number === undefined) {
+//         throw Error(`Unexpected int value for: ${col.name}: ${value}`);
+//       }
+//       return number;
+//     } else if (typeof value === "number") {
+//       return value;
+//     }
+//
+//     throw Error(`Unexpected int value for: ${col.name}: ${value}`);
+//   } else if (isReal(type)) {
+//     if (typeof value === "string") {
+//       const number = tryParseFloat(value);
+//       if (number === undefined) {
+//         throw Error(`Unexpected real value for: ${col.name}: ${value}`);
+//       }
+//       return number;
+//     } else if (typeof value === "number") {
+//       return value;
+//     }
+//
+//     throw Error(`Unexpected real value for: ${col.name}: ${value}`);
+//   }
+//
+//   return value;
+// }
 
-  if (value === undefined) {
-    throw Error(`Missing value for: ${col.name}`);
-  }
-
-  const nullable = isNullableColumn({
-    type: col.data_type,
-    notNull,
-    isPk,
-  });
-
-  if (value === null && nullable) {
-    return null;
-  }
-
-  if (type === "Blob") {
-    if (typeof value === "string") {
-      if (value === "") {
-        if (nullable) {
-          return undefined;
-        }
-      }
-
-      try {
-        urlSafeBase64Decode(value);
-      } catch {
-        throw new Error("Url-safe base64 decoding error");
-      }
-
-      return value;
-    }
-
-    throw Error(`Unexpected blob value for: ${col.name}: ${value}`);
-  } else if (type === "Text") {
-    if (typeof value === "string") {
-      return value;
-    }
-
-    throw Error(`Unexpected string value for: ${col.name}: ${value}`);
-  } else if (isInt(type)) {
-    if (typeof value === "string") {
-      const number = tryParseInt(value);
-      if (number === undefined) {
-        throw Error(`Unexpected int value for: ${col.name}: ${value}`);
-      }
-      return number;
-    } else if (typeof value === "number") {
-      return value;
-    }
-
-    throw Error(`Unexpected int value for: ${col.name}: ${value}`);
-  } else if (isReal(type)) {
-    if (typeof value === "string") {
-      const number = tryParseFloat(value);
-      if (number === undefined) {
-        throw Error(`Unexpected real value for: ${col.name}: ${value}`);
-      }
-      return number;
-    } else if (typeof value === "number") {
-      return value;
-    }
-
-    throw Error(`Unexpected real value for: ${col.name}: ${value}`);
-  }
-
-  return value;
-}
-
-export function preProcessRow(
-  table: Table,
-  row: FormRow,
-  isUpdate: boolean,
-): FormRow {
-  const result: FormRow = {};
-  for (const col of table.columns) {
-    const value = isUpdate
-      ? preProcessUpdateValue(col, row[col.name])
-      : preProcessInsertValue(col, row[col.name]);
-    if (value !== undefined) {
-      result[col.name] = value;
-    }
-  }
-  return result;
-}
+// export function preProcessRow(
+//   table: Table,
+//   row: FormRow,
+//   isUpdate: boolean,
+// ): FormRow {
+//   const result: FormRow = {};
+//   for (const col of table.columns) {
+//     const value = isUpdate
+//       ? preProcessUpdateValue(col, row[col.name])
+//       : preProcessInsertValue(col, row[col.name]);
+//     if (value !== undefined) {
+//       result[col.name] = value;
+//     }
+//   }
+//   return result;
+// }
 
 // Just to make it explicit.
-export function copyRow(row: FormRow): FormRow {
-  return { ...row };
-}
+// export function copyRow(row: FormRow): FormRow {
+//   return { ...row };
+// }
 
 // Just to make it explicit.
 export function copyRow2(row: FormRow2): FormRow2 {
+  // NOTE: This is a shallow copy, so we might something like the code below if
+  // this wasn't enough.
   return { ...row };
+  // return Object.fromEntries(Object.entries(row).map(([k, v]) => {
+  //   if (v === "Null") {
+  //     return [k, "Null"];
+  //   }
+  //   return [k, Object.assign({}, v)];
+  // }));
 }
 
 export function buildDefaultRow(schema: Table): FormRow2 {
@@ -357,7 +366,9 @@ export function buildDefaultRow(schema: Table): FormRow2 {
     } else if (isReal(type)) {
       obj[col.name] = { Real: 0.0 };
     } else {
-      console.warn(`No fallback for column: ${col.name}, type: '${type}' - skipping default`);
+      console.warn(
+        `No fallback for column: ${col.name}, type: '${type}' - skipping default`,
+      );
     }
   }
   return obj;

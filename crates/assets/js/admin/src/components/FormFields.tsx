@@ -496,7 +496,7 @@ function buildSqlIntegerFormField(opts: SqlFormFieldOptions) {
 function buildSqlTextFormField(opts: SqlFormFieldOptions) {
   const externDisable = opts.disabled ?? false;
 
-  return function(field: () => FieldApiT<SqlTextValue | null>) {
+  return function (field: () => FieldApiT<SqlTextValue | null>) {
     const initialValue: SqlTextValue | null = field().state.value;
     const [enabled, setEnabled] = createSignal<boolean>(
       !externDisable && initialValue !== null && initialValue !== undefined,
@@ -532,8 +532,8 @@ function buildSqlTextFormField(opts: SqlFormFieldOptions) {
                 field().handleChange(
                   value !== undefined
                     ? {
-                      Text: value,
-                    }
+                        Text: value,
+                      }
                     : null,
                 );
               }}
@@ -573,7 +573,7 @@ function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
     throw Error("Expected Base64UrlSafe");
   }
 
-  return function(field: () => FieldApiT<SqlBlobValue | null>) {
+  return function (field: () => FieldApiT<SqlBlobValue | null>) {
     const initialValue: SqlBlobValue | null = field().state.value;
     const [enabled, setEnabled] = createSignal<boolean>(
       !externDisable && initialValue !== null && initialValue !== undefined,
@@ -621,10 +621,10 @@ function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
                 field().handleChange(
                   value !== undefined
                     ? {
-                      Blob: {
-                        Base64UrlSafe: value,
-                      },
-                    }
+                        Blob: {
+                          Base64UrlSafe: value,
+                        },
+                      }
                     : null,
                 );
               }}
@@ -657,7 +657,7 @@ function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
 function buildSqlAnyFormField(opts: SqlFormFieldOptions) {
   const externDisable = opts.disabled ?? false;
 
-  return function(field: () => FieldApiT<SqlValue | null>) {
+  return function (field: () => FieldApiT<SqlValue | null>) {
     const initialValue: SqlValue | null = field().state.value;
     const [enabled, setEnabled] = createSignal<boolean>(
       !externDisable && initialValue !== null && initialValue !== undefined,
@@ -703,8 +703,8 @@ function buildSqlAnyFormField(opts: SqlFormFieldOptions) {
                 field().handleChange(
                   value !== undefined
                     ? {
-                      Text: value,
-                    }
+                        Text: value,
+                      }
                     : null,
                 );
               }}
@@ -920,6 +920,12 @@ export function unsetOrLargerThanZero() {
     },
   };
 }
+
+// TODO:
+// * Replace null with "Null"
+// * Re-introduce validation. Numbers covered. What about b64 unsafe url.
+// * Do we need to do pre-processing, e.g. strip unchanged values from update?
+// * For ANY fields, use string field and use affinity like parsing.
 
 // NOTE: this is not a component but a builder:
 //   "(field: () => FieldApiT<T>) => Component"
