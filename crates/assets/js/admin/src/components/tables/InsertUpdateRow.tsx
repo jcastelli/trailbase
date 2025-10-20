@@ -59,6 +59,7 @@ export function InsertUpdateRowForm(props: {
   const isUpdate = () => props.row !== undefined;
 
   const form = createForm(() => {
+    console.debug("create form");
     const defaultValues: Record = props.row
       ? { ...props.row }
       : buildDefaultRow(props.schema);
@@ -69,16 +70,17 @@ export function InsertUpdateRowForm(props: {
         console.debug(`Submitting ${isUpdate() ? "update" : "insert"}:`, value);
         try {
           if (isUpdate()) {
-            await updateRow(props.schema, value);
+            // NOTE: updateRow mutates the value - it deletes the pk, thus
+            // shallow copy.
+            await updateRow(props.schema, { ...value });
           } else {
-            await insertRow(props.schema, value);
+            await insertRow(props.schema, { ...value });
           }
 
           props.rowsRefetch();
           props.close();
         } catch (err) {
           showToast({
-            title: "Uncaught Error",
             description: `${err}`,
             variant: "error",
           });
@@ -122,11 +124,24 @@ export function InsertUpdateRowForm(props: {
                 <form.Field
                   name={col.name}
                   validators={{
-                    onChange: ({
-                      value: _,
-                    }: {
-                      value: SqlValue | undefined;
-                    }) => {
+                    onChange: ({ value }: { value: SqlValue | undefined }) => {
+                      if (value === undefined || value === "Null") {
+                        return undefined;
+                      }
+
+                      if ("Blob" in value) {
+                        const blob = value.Blob;
+                        if ("Base64UrlSafe" in blob) {
+                          try {
+                            urlSafeBase64Decode(blob.Base64UrlSafe);
+                          } catch {
+                            return "Not valid url-safe b64";
+                          }
+                          return undefined;
+                        }
+                        throw Error("Expected Base64UrlSafe");
+                      }
+
                       try {
                         // FIXME: Needs to be removed or updated for SqlValue (previously: null | string | number).
                         // if (isUpdate()) {
@@ -219,41 +234,11 @@ function FormRow<
   );
 }
 
-function RealTextField(props: {
-  label: JSX.Element;
-  disabled?: boolean;
-  value?: number;
-  placeholder?: string;
-  field: () => FieldApiT<SqlValue | undefined>;
-}) {
-  return (
-    <>
-      <TextFieldLabel>{props.label}</TextFieldLabel>
-
-      <TextFieldInput
-        disabled={props.disabled}
-        type={props.disabled ? "text" : "text"}
-        pattern="[0-9]+[.,]?[0-9]*"
-        value={props.value ?? ""}
-        placeholder={props.placeholder ?? ""}
-        autocomplete={false}
-        onBlur={props.field().handleBlur}
-        onInput={(e: Event) => {
-          const parsed = tryParseFloat((e.target as HTMLInputElement).value);
-          if (parsed !== undefined) {
-            props.field().handleChange({ Real: parsed });
-          }
-        }}
-      />
-    </>
-  );
-}
-
 type SqlFormFieldOptions = {
   label: () => JSX.Element;
-  disabled?: boolean;
-  placeholder?: string;
-  nullable?: boolean;
+  disabled: boolean;
+  placeholder: string | undefined;
+  nullable: boolean;
 };
 
 function getReal(value: SqlValue | undefined): number | undefined {
@@ -285,12 +270,15 @@ function getBlob(value: SqlValue | undefined): string | undefined {
 }
 
 function buildSqlRealFormField(opts: SqlFormFieldOptions) {
-  const externDisable = opts.disabled ?? false;
+  const externDisable = opts.disabled;
 
   return function builder(field: () => FieldApiT<SqlValue | undefined>) {
     const initialValue: SqlValue | undefined = field().state.value;
     const initialChecked: boolean =
       initialValue !== undefined && initialValue !== "Null";
+    const [disabled, setDisabled] = createSignal<boolean>(
+      opts.nullable && !initialChecked,
+    );
 
     const placeholder = (): string | undefined => {
       if (disabled()) {
@@ -303,20 +291,30 @@ function buildSqlRealFormField(opts: SqlFormFieldOptions) {
     const value = (): number | undefined =>
       disabled() ? undefined : getReal(field().state.value);
 
-    const [disabled, setDisabled] = createSignal<boolean>(!initialChecked);
-
     return (
       <TextField class="w-full">
         <FormRow field={field}>
-          <RealTextField
-            label={opts.label()}
-            disabled={externDisable || disabled()}
-            value={value()}
-            placeholder={placeholder()}
-            field={field}
+          <TextFieldLabel>{opts.label()}</TextFieldLabel>
+
+          <TextFieldInput
+            disabled={disabled()}
+            type={"text"}
+            pattern="[ ]*[0-9]+[.,]?[0-9]*[ ]*"
+            value={value() ?? ""}
+            placeholder={placeholder() ?? ""}
+            autocomplete={false}
+            onBlur={field().handleBlur}
+            onInput={(e: Event) => {
+              const parsed = tryParseFloat(
+                (e.target as HTMLInputElement).value,
+              );
+              if (parsed !== undefined) {
+                field().handleChange({ Real: parsed });
+              }
+            }}
           />
 
-          {(opts.nullable ?? true) && (
+          {opts.nullable && (
             <Checkbox
               disabled={externDisable}
               defaultChecked={initialChecked}
@@ -337,12 +335,15 @@ function buildSqlRealFormField(opts: SqlFormFieldOptions) {
 }
 
 function buildSqlIntegerFormField(opts: SqlFormFieldOptions) {
-  const externDisable = opts.disabled ?? false;
+  const externDisable = opts.disabled;
 
   return function builder(field: () => FieldApiT<SqlValue | undefined>) {
     const initialValue: SqlValue | undefined = field().state.value;
     const initialChecked: boolean =
       initialValue !== undefined && initialValue !== "Null";
+    const [disabled, setDisabled] = createSignal<boolean>(
+      opts.nullable && !initialChecked,
+    );
 
     const placeholder = (): string | undefined => {
       if (disabled()) {
@@ -355,8 +356,6 @@ function buildSqlIntegerFormField(opts: SqlFormFieldOptions) {
     const value = (): bigint | undefined =>
       disabled() ? undefined : getInteger(field().state.value);
 
-    const [disabled, setDisabled] = createSignal<boolean>(!initialChecked);
-
     return (
       <TextField class="w-full">
         <FormRow field={field}>
@@ -366,7 +365,7 @@ function buildSqlIntegerFormField(opts: SqlFormFieldOptions) {
             disabled={disabled()}
             type={disabled() ? "number" : "text"}
             step={1}
-            pattern={"d+"}
+            pattern={"[ ]*[0-9]+[ ]*"}
             value={value() ?? ""}
             placeholder={placeholder() ?? ""}
             onBlur={field().handleBlur}
@@ -380,7 +379,7 @@ function buildSqlIntegerFormField(opts: SqlFormFieldOptions) {
             }}
           />
 
-          {(opts.nullable ?? true) && (
+          {opts.nullable && (
             <Checkbox
               disabled={externDisable}
               defaultChecked={initialChecked}
@@ -402,12 +401,15 @@ function buildSqlIntegerFormField(opts: SqlFormFieldOptions) {
 }
 
 function buildSqlTextFormField(opts: SqlFormFieldOptions) {
-  const externDisable = opts.disabled ?? false;
+  const externDisable = opts.disabled;
 
   return function (field: () => FieldApiT<SqlValue | undefined>) {
     const initialValue: SqlValue | undefined = field().state.value;
     const initialChecked: boolean =
       initialValue !== undefined && initialValue !== "Null";
+    const [disabled, setDisabled] = createSignal<boolean>(
+      opts.nullable && !initialChecked,
+    );
 
     const placeholder = (): string | undefined => {
       if (disabled()) {
@@ -420,7 +422,7 @@ function buildSqlTextFormField(opts: SqlFormFieldOptions) {
     const value = (): string | undefined =>
       disabled() ? undefined : getText(field().state.value);
 
-    const [disabled, setDisabled] = createSignal<boolean>(!initialChecked);
+    console.log(field().name, field().state.value, disabled());
 
     return (
       <TextField class="w-full">
@@ -430,7 +432,7 @@ function buildSqlTextFormField(opts: SqlFormFieldOptions) {
           <TextFieldInput
             disabled={disabled()}
             type={"text"}
-            value={value()}
+            value={value() ?? ""}
             placeholder={placeholder()}
             onBlur={field().handleBlur}
             onInput={(e: Event) => {
@@ -443,7 +445,7 @@ function buildSqlTextFormField(opts: SqlFormFieldOptions) {
             data-testid="input"
           />
 
-          {(opts.nullable ?? true) && (
+          {opts.nullable && (
             <Checkbox
               disabled={externDisable}
               defaultChecked={initialChecked}
@@ -464,12 +466,15 @@ function buildSqlTextFormField(opts: SqlFormFieldOptions) {
 }
 
 function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
-  const externDisable = opts.disabled ?? false;
+  const externDisable = opts.disabled;
 
   return function (field: () => FieldApiT<SqlValue | undefined>) {
     const initialValue: SqlValue | undefined = field().state.value;
     const initialChecked: boolean =
       initialValue !== undefined && initialValue !== "Null";
+    const [disabled, setDisabled] = createSignal<boolean>(
+      opts.nullable && !initialChecked,
+    );
 
     const placeholder = (): string | undefined => {
       if (disabled()) {
@@ -482,8 +487,6 @@ function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
     const value = (): string | undefined =>
       disabled() ? undefined : getBlob(field().state.value);
 
-    const [disabled, setDisabled] = createSignal<boolean>(!initialChecked);
-
     return (
       <TextField class="w-full">
         <FormRow field={field}>
@@ -492,7 +495,7 @@ function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
           <TextFieldInput
             disabled={disabled()}
             type={"text"}
-            value={value()}
+            value={value() ?? ""}
             placeholder={placeholder()}
             onBlur={field().handleBlur}
             onInput={(e: Event) => {
@@ -506,7 +509,7 @@ function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
             data-testid="input"
           />
 
-          {(opts.nullable ?? true) && (
+          {opts.nullable && (
             <Checkbox
               disabled={externDisable}
               defaultChecked={initialChecked}
@@ -527,12 +530,15 @@ function buildSqlBlobFormField(opts: SqlFormFieldOptions) {
 }
 
 function buildSqlAnyFormField(opts: SqlFormFieldOptions) {
-  const externDisable = opts.disabled ?? false;
+  const externDisable = opts.disabled;
 
   return function (field: () => FieldApiT<SqlValue | undefined>) {
     const initialValue: SqlValue | undefined = field().state.value;
     const initialChecked: boolean =
       initialValue !== undefined && initialValue !== "Null";
+    const [disabled, setDisabled] = createSignal<boolean>(
+      opts.nullable && !initialChecked,
+    );
 
     const placeholder = (): string | undefined => {
       if (disabled()) {
@@ -549,8 +555,6 @@ function buildSqlAnyFormField(opts: SqlFormFieldOptions) {
       }
     };
 
-    const [disabled, setDisabled] = createSignal<boolean>(!initialChecked);
-
     return (
       <TextField class="w-full">
         <FormRow field={field}>
@@ -559,7 +563,7 @@ function buildSqlAnyFormField(opts: SqlFormFieldOptions) {
           <TextFieldInput
             disabled={disabled()}
             type={"text"}
-            value={value()}
+            value={value() ?? ""}
             placeholder={placeholder()}
             onBlur={field().handleBlur}
             onInput={(e: Event) => {
@@ -573,7 +577,7 @@ function buildSqlAnyFormField(opts: SqlFormFieldOptions) {
             data-testid="input"
           />
 
-          {(opts.nullable ?? true) && (
+          {opts.nullable && (
             <Checkbox
               disabled={externDisable}
               defaultChecked={initialChecked}

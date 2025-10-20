@@ -24,20 +24,20 @@ export function copyToClipboard(contents: string) {
 }
 
 export function tryParseInt(value: string): number | undefined {
-  const n = parseInt(value);
+  const n = parseInt(value.trim());
   return isNaN(n) ? undefined : n;
 }
 
 export function tryParseBigInt(value: string): bigint | undefined {
   try {
-    return BigInt(value);
+    return BigInt(value.trim());
   } catch {
     return undefined;
   }
 }
 
 export function tryParseFloat(value: string): number | undefined {
-  const n = parseFloat(value);
+  const n = parseFloat(value.trim());
   return isNaN(n) ? undefined : n;
 }
 
