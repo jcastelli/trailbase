@@ -18,10 +18,6 @@ import type { SqlValue } from "@/lib/value";
 import type { ColumnDataType } from "@bindings/ColumnDataType";
 import type { Table } from "@bindings/Table";
 
-// NOTE: We use a simpler type here over `Object`, `JsonValue` or other recursive
-// type definitions to prevent solid-forms from doing infinite-recursion type
-// gymnastics.
-//
 // There's a stark difference between null and undefined, the former is an
 // explicit database value and the latter will be skipped in updates.
 // export type RowValue = string | number | boolean | null;
@@ -32,9 +28,11 @@ import type { Table } from "@bindings/Table";
 // An array representation of a single row.
 // export type RowData = RowValue[];
 
-// A record representation of a single row keyed by column name.
-// TODO: Is the undefined needed?
-export type FormRow2 = { [key: string]: SqlValue | undefined };
+/// A record, i.e. row of SQL values (including "Null") or undefined (i.e. don't submit), keyed by column name.
+/// We use a map-like structure to allow for absence and avoid schema complexities and skew.
+type Record = { [key: string]: SqlValue | undefined };
+
+export type FormRow2 = Record;
 
 // An array representation of a single row.
 export type Row2Data = SqlValue[];
@@ -310,7 +308,7 @@ export function literalDefault(
 // }
 
 // Just to make it explicit.
-export function copyRow2(row: FormRow2): FormRow2 {
+export function copyRow2(row: Record): Record {
   // NOTE: This is a shallow copy, so we might something like the code below if
   // this wasn't enough.
   return { ...row };
@@ -322,7 +320,7 @@ export function copyRow2(row: FormRow2): FormRow2 {
   // }));
 }
 
-export function buildDefaultRow(schema: Table): FormRow2 {
+export function buildDefaultRow(schema: Table): Record {
   const obj: FormRow2 = {};
   for (const col of schema.columns) {
     const type = col.data_type;
