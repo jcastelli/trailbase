@@ -1,7 +1,4 @@
 import { expect, test, describe } from "vitest";
-import { copyRow2 } from "@/lib/convert";
-import type { FormRow2 } from "@/lib/convert";
-import type { SqlTextValue } from "@/lib/value";
 
 import { parseFilter } from "@/lib/list";
 
@@ -34,35 +31,5 @@ describe("filterParser", () => {
       ["filter[$and][0][$or][1][x][$eq]", "4"],
       ["filter[$and][1][y][$ne]", "foo"],
     ]);
-  });
-});
-
-describe("utils", () => {
-  test("coypAndConvertRow", () => {
-    const x: FormRow2 = {
-      text: {
-        Text: "test",
-      },
-      real: {
-        Real: 5.1,
-      },
-      int: {
-        Integer: BigInt(5),
-      },
-    };
-
-    const y = copyRow2(x);
-    for (const key of Object.keys(x)) {
-      expect(x[key]).toStrictEqual(y[key]);
-    }
-
-    // Make sure it's an actual copy.
-    y["text"] = {
-      Text: "update",
-    };
-    // NOTE: It's not a deepcopy, thus below would fail.
-    // (y["text"] as SqlTextValue).Text = "update";
-
-    expect((x["text"] as SqlTextValue).Text).toBe("test");
   });
 });

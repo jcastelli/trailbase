@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import { createConfigQuery, invalidateConfig } from "@/lib/config";
-import type { FormRow2, Row2Data } from "@/lib/convert";
+import type { Record, RowData } from "@/lib/convert";
 import { hashSqlValue } from "@/lib/convert";
 import { adminFetch } from "@/lib/fetch";
 import { urlSafeBase64ToUuid } from "@/lib/utils";
@@ -87,16 +87,16 @@ type FileUpload = {
 
 type FileUploads = FileUpload[];
 
-function rowDataToRow(columns: Column[], row: Row2Data): FormRow2 {
-  const result: FormRow2 = {};
+function rowDataToRow(columns: Column[], row: RowData): Record {
+  const result: Record = {};
   for (let i = 0; i < row.length; ++i) {
     result[columns[i].name] = row[i];
   }
   return result;
 }
 
-function renderCell2(
-  context: CellContext<Row2Data, SqlValue>,
+function renderCell(
+  context: CellContext<RowData, SqlValue>,
   tableName: QualifiedName,
   columns: Column[],
   pkIndex: number,
@@ -194,98 +194,6 @@ function renderCell2(
     }
   }
 }
-
-// function renderCell(
-//   context: CellContext<RowData, unknown>,
-//   tableName: QualifiedName,
-//   columns: Column[],
-//   pkIndex: number,
-//   cell: {
-//     col: Column;
-//     isUUID: boolean;
-//     isJSON: boolean;
-//     isFile: boolean;
-//     isFiles: boolean;
-//   },
-// ): unknown {
-//   const value = context.getValue();
-//   if (value === null) {
-//     return "NULL";
-//   }
-//
-//   switch (typeof value) {
-//     case "bigint":
-//       return value.toString();
-//     case "string": {
-//       if (cell.isUUID) {
-//         return urlSafeBase64ToUuid(value);
-//       }
-//
-//       const imageMime = (f: FileUpload) => {
-//         const mime = f.mime_type;
-//         return mime === "image/jpeg" || mime === "image/png";
-//       };
-//
-//       if (cell.isFile) {
-//         const fileUpload = JSON.parse(value) as FileUpload;
-//         if (imageMime(fileUpload)) {
-//           const pkCol = columns[pkIndex].name;
-//           const pkVal = context.row.original[pkIndex];
-//           const url = imageUrl({
-//             tableName,
-//             query: {
-//               pk_column: pkCol,
-//               pk_value: pkVal,
-//               file_column_name: cell.col.name,
-//               file_name: null,
-//             },
-//           });
-//
-//           return <Image url={url} mime={fileUpload.mime_type} />;
-//         }
-//       } else if (cell.isFiles) {
-//         const fileUploads = JSON.parse(value) as FileUploads;
-//
-//         const indexes: number[] = [];
-//         for (let i = 0; i < fileUploads.length; ++i) {
-//           const file = fileUploads[i];
-//           if (imageMime(file)) {
-//             indexes.push(i);
-//           }
-//
-//           if (indexes.length >= 3) break;
-//         }
-//
-//         if (indexes.length > 0) {
-//           const pkCol = columns[pkIndex].name;
-//           const pkVal = context.row.original[pkIndex] as string;
-//           return (
-//             <div class="flex gap-2">
-//               <For each={indexes}>
-//                 {(index: number) => {
-//                   const fileUpload = fileUploads[index];
-//                   const url = imageUrl({
-//                     tableName,
-//                     query: {
-//                       pk_column: pkCol,
-//                       pk_value: pkVal,
-//                       file_column_name: cell.col.name,
-//                       file_name: fileUpload.filename ?? null,
-//                     },
-//                   });
-//
-//                   return <Image url={url} mime={fileUpload.mime_type} />;
-//                 }}
-//               </For>
-//             </div>
-//           );
-//         }
-//       }
-//     }
-//   }
-//
-//   return value;
-// }
 
 function Image(props: { url: string; mime: string }) {
   const imageData = useQuery(() => ({
@@ -557,7 +465,7 @@ type TableState = {
 
   // Derived
   pkColumnIndex: number;
-  columnDefs: ColumnDef<Row2Data, SqlValue>[];
+  columnDefs: ColumnDef<RowData, SqlValue>[];
 
   response: ListRowsResponse;
 };
@@ -598,7 +506,7 @@ function buildColumnDefs(
   tableType: TableType,
   pkColumn: number,
   columns: Column[],
-): ColumnDef<Row2Data, SqlValue>[] {
+): ColumnDef<RowData, SqlValue>[] {
   return columns.map((col, idx) => {
     const fk = getForeignKey(col.options);
     const notNull = isNotNull(col.options);
@@ -623,7 +531,7 @@ function buildColumnDefs(
     return {
       header,
       cell: (context) =>
-        renderCell2(context, tableName, columns, pkColumn, {
+        renderCell(context, tableName, columns, pkColumn, {
           col: col,
           isUUID,
           isJSON,
@@ -634,7 +542,7 @@ function buildColumnDefs(
           isFile: isFile && tableType !== "view",
           isFiles: isFiles && tableType !== "view",
         }),
-      accessorFn: (row: Row2Data) => row[idx],
+      accessorFn: (row: RowData) => row[idx],
     };
   });
 }
@@ -645,7 +553,7 @@ function RowDataTable(props: {
   filter: SimpleSignal<string | undefined>;
   rowsRefetch: () => void;
 }) {
-  const [editRow, setEditRow] = createSignal<FormRow2 | undefined>();
+  const [editRow, setEditRow] = createSignal<Record | undefined>();
   const [selectedRows, setSelectedRows] = createSignal(
     new Map<string, SqlValue>(),
   );
@@ -714,14 +622,14 @@ function RowDataTable(props: {
                   }}
                   onRowClick={
                     mutable()
-                      ? (_idx: number, row: Row2Data) => {
+                      ? (_idx: number, row: RowData) => {
                           setEditRow(rowDataToRow(columns(), row));
                         }
                       : undefined
                   }
                   onRowSelection={
                     mutable()
-                      ? (rows: Row<Row2Data>[], value: boolean) => {
+                      ? (rows: Row<RowData>[], value: boolean) => {
                           const newSelection = new Map<string, SqlValue>(
                             selectedRows(),
                           );

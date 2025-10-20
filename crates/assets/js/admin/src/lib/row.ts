@@ -4,8 +4,7 @@ import {
   findPrimaryKeyColumnIndex,
   prettyFormatQualifiedName,
 } from "@/lib/schema";
-// import { preProcessRow } from "@/lib/convert";
-import type { FormRow2 } from "@/lib/convert";
+import type { Record } from "@/lib/convert";
 
 import type { Table } from "@bindings/Table";
 import type { InsertRowRequest } from "@bindings/InsertRowRequest";
@@ -14,9 +13,7 @@ import type { DeleteRowsRequest } from "@bindings/DeleteRowsRequest";
 import type { ListRowsResponse } from "@bindings/ListRowsResponse";
 import type { QualifiedName } from "@bindings/QualifiedName";
 
-export async function insertRow(table: Table, row: FormRow2) {
-  // const processedRow = preProcessRow(table, row, false);
-
+export async function insertRow(table: Table, row: Record) {
   const request: InsertRowRequest = {
     row: row,
   };
@@ -30,7 +27,7 @@ export async function insertRow(table: Table, row: FormRow2) {
   return await response.text();
 }
 
-export async function updateRow(table: Table, row: FormRow2) {
+export async function updateRow(table: Table, row: Record) {
   const tableName: string = prettyFormatQualifiedName(table.name);
   const primaryKeyColumIndex = findPrimaryKeyColumnIndex(table.columns);
   if (primaryKeyColumIndex < 0) {

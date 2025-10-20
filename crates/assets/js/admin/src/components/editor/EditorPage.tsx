@@ -63,7 +63,7 @@ import { createTableSchemaQuery } from "@/lib/table";
 import { executeSql, type ExecutionResult } from "@/lib/fetch";
 import { isNotNull } from "@/lib/schema";
 import { sqlValueToString } from "@/lib/value";
-import type { Row2Data } from "@/lib/convert";
+import type { RowData } from "@/lib/convert";
 
 function buildSchema(schemas: ListSchemasResponse): SQLNamespace {
   const schema: {
@@ -134,13 +134,13 @@ function ResultView(props: {
 }) {
   const response = () => props.response ?? props.script.result;
 
-  function columnDefs(data: QueryResponse): ColumnDef<Row2Data, SqlValue>[] {
+  function columnDefs(data: QueryResponse): ColumnDef<RowData, SqlValue>[] {
     return (data.columns ?? []).map((col, idx) => {
       const notNull = isNotNull(col.options);
 
       const header = `${col.name} [${col.data_type}${notNull ? "" : "?"}]`;
       return {
-        accessorFn: (row: Row2Data) => sqlValueToString(row[idx]),
+        accessorFn: (row: RowData) => sqlValueToString(row[idx]),
         header,
       };
     });
@@ -163,7 +163,7 @@ function ResultView(props: {
             {/* TODO: Enable pagination */}
             <DataTable
               columns={() => columnDefs(response()!.data!)}
-              data={() => response()!.data!.rows as Row2Data[]}
+              data={() => response()!.data!.rows as RowData[]}
               pagination={{
                 pageIndex: 0,
                 pageSize: 50,

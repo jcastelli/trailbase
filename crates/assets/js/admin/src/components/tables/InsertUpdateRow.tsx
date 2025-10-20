@@ -12,7 +12,6 @@ import type { ColumnDataType } from "@bindings/ColumnDataType";
 import { Checkbox } from "@/components/ui/checkbox";
 import { gapStyle, GridFieldInfo } from "@/components/FormFields";
 import type { FieldApiT } from "@/components/FormFields";
-import { getDefaultValue, isNotNull, isPrimaryKeyColumn } from "@/lib/schema";
 import { SheetContainer } from "@/components/SafeSheet";
 import { showToast } from "@/components/ui/toast";
 import {
@@ -26,12 +25,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import {
-  buildDefaultRow,
-  literalDefault,
-  // preProcessInsertValue,
-  // preProcessUpdateValue,
-} from "@/lib/convert";
+import { getDefaultValue, isNotNull, isPrimaryKeyColumn } from "@/lib/schema";
+import { buildDefaultRow, literalDefault } from "@/lib/convert";
+import type { Record } from "@/lib/convert";
 import { updateRow, insertRow } from "@/lib/row";
 import { sqlValueToString } from "@/lib/value";
 import type {
@@ -45,10 +41,6 @@ import type {
 import { tryParseFloat, tryParseBigInt } from "@/lib/utils";
 import { isNullableColumn } from "@/lib/schema";
 
-/// A record, i.e. row of SQL values (including "Null") or undefined (don't submit), keyed by column name.
-/// We use a map-like structure to allow for absence and avoid schema complexities and skew.
-type Record = { [key: string]: SqlValue | undefined };
-
 export function InsertUpdateRowForm(props: {
   close: () => void;
   markDirty: () => void;
@@ -59,7 +51,6 @@ export function InsertUpdateRowForm(props: {
   const isUpdate = () => props.row !== undefined;
 
   const form = createForm(() => {
-    console.debug("create form");
     const defaultValues: Record = props.row
       ? { ...props.row }
       : buildDefaultRow(props.schema);
@@ -421,8 +412,6 @@ function buildSqlTextFormField(opts: SqlFormFieldOptions) {
 
     const value = (): string | undefined =>
       disabled() ? undefined : getText(field().state.value);
-
-    console.log(field().name, field().state.value, disabled());
 
     return (
       <TextField class="w-full">
