@@ -39,8 +39,8 @@ impl Blob {
   pub fn to_bytes(&self) -> Result<Vec<u8>, DecodeError> {
     return Ok(match self {
       Blob::Array(v) => v.clone(),
-      Blob::Base64UrlSafe(s) => BASE64_URL_SAFE.decode(&s)?,
-      Blob::Hex(s) => decode_hex(&s)?,
+      Blob::Base64UrlSafe(s) => BASE64_URL_SAFE.decode(s)?,
+      Blob::Hex(s) => decode_hex(s)?,
     });
   }
 
@@ -122,7 +122,7 @@ impl From<&rusqlite::types::Value> for SqlValue {
 }
 
 fn decode_hex(s: &str) -> Result<Vec<u8>, DecodeError> {
-  if s.len() % 2 != 0 {
+  if !s.len().is_multiple_of(2) {
     return Err(DecodeError::Hex);
   }
 
