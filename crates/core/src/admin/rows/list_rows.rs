@@ -18,16 +18,16 @@ use crate::schema_metadata::{TableMetadata, TableOrViewMetadata};
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct ListRowsResponse {
-  pub total_row_count: i64,
-  pub cursor: Option<String>,
-
+  /// Column schema.
   pub columns: Vec<Column>,
 
-  // NOTE: that we're not expanding nested JSON and are encoding Blob to
-  // base64, this is thus a just a JSON subset. See test below.
-  // #[ts(type = "(string | number | boolean | null)[][]")]
-  // pub rows: Vec<Vec<serde_json::Value>>,
-  pub rows2: Vec<Vec<SqlValue>>,
+  /// Actual row data.
+  pub rows: Vec<Vec<SqlValue>>,
+
+  /// Total number of records.
+  pub total_row_count: i64,
+  /// Next cursor for pagination.
+  pub cursor: Option<String>,
 }
 
 pub async fn list_rows_handler(
@@ -150,7 +150,7 @@ pub async fn list_rows_handler(
         }
       }
     },
-    rows2: rows,
+    rows,
   }));
 }
 

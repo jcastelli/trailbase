@@ -2,4 +2,20 @@
 import type { Column } from "./Column";
 import type { SqlValue } from "./SqlValue";
 
-export type ListRowsResponse = { total_row_count: bigint, cursor: string | null, columns: Array<Column>, rows2: Array<Array<SqlValue>>, };
+export type ListRowsResponse = { 
+/**
+ * Column schema.
+ */
+columns: Array<Column>, 
+/**
+ * Actual row data.
+ */
+rows: Array<Array<SqlValue>>, 
+/**
+ * Total number of records.
+ */
+total_row_count: bigint, 
+/**
+ * Next cursor for pagination.
+ */
+cursor: string | null, };

@@ -1,4 +1,4 @@
-import { For, Match, Switch, createMemo, createSignal } from "solid-js";
+import { For, Match, Switch, createMemo, createSignal, JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useSearchParams } from "@solidjs/router";
 import type {
@@ -107,9 +107,9 @@ function renderCell(
     isFile: boolean;
     isFiles: boolean;
   },
-): unknown {
+): JSX.Element {
   const value: SqlValue = context.getValue();
-  if (value === null || value === "Null") {
+  if (value === "Null") {
     return "NULL";
   }
 
@@ -133,66 +133,72 @@ function renderCell(
     throw Error("Expected Base64UrlSafe");
   }
 
-  const imageMime = (f: FileUpload) => {
-    const mime = f.mime_type;
-    return mime === "image/jpeg" || mime === "image/png";
-  };
+  if ("Text" in value) {
+    const imageMime = (f: FileUpload) => {
+      const mime = f.mime_type;
+      return mime === "image/jpeg" || mime === "image/png";
+    };
 
-  if (cell.isFile) {
-    const fileUpload = JSON.parse(value.Text) as FileUpload;
-    if (imageMime(fileUpload)) {
-      const pkCol = columns[pkIndex].name;
-      const pkVal = context.row.original[pkIndex];
-      const url = imageUrl({
-        tableName,
-        query: {
-          pk_column: pkCol,
-          pk_value: pkVal,
-          file_column_name: cell.col.name,
-          file_name: null,
-        },
-      });
+    if (cell.isFile) {
+      const fileUpload = JSON.parse(value.Text) as FileUpload;
+      if (imageMime(fileUpload)) {
+        const pkCol = columns[pkIndex].name;
+        const pkVal = context.row.original[pkIndex];
+        const url = imageUrl({
+          tableName,
+          query: {
+            pk_column: pkCol,
+            pk_value: pkVal,
+            file_column_name: cell.col.name,
+            file_name: null,
+          },
+        });
 
-      return <Image url={url} mime={fileUpload.mime_type} />;
-    }
-  } else if (cell.isFiles) {
-    const fileUploads = JSON.parse(value.Text) as FileUploads;
+        return <Image url={url} mime={fileUpload.mime_type} />;
+      }
+    } else if (cell.isFiles) {
+      const fileUploads = JSON.parse(value.Text) as FileUploads;
 
-    const indexes: number[] = [];
-    for (let i = 0; i < fileUploads.length; ++i) {
-      const file = fileUploads[i];
-      if (imageMime(file)) {
-        indexes.push(i);
+      const indexes: number[] = [];
+      for (let i = 0; i < fileUploads.length; ++i) {
+        const file = fileUploads[i];
+        if (imageMime(file)) {
+          indexes.push(i);
+        }
+
+        if (indexes.length >= 3) break;
       }
 
-      if (indexes.length >= 3) break;
+      if (indexes.length > 0) {
+        const pkCol = columns[pkIndex].name;
+        const pkVal = context.row.original[pkIndex];
+        return (
+          <div class="flex gap-2">
+            <For each={indexes}>
+              {(index: number) => {
+                const fileUpload = fileUploads[index];
+                const url = imageUrl({
+                  tableName,
+                  query: {
+                    pk_column: pkCol,
+                    pk_value: pkVal,
+                    file_column_name: cell.col.name,
+                    file_name: fileUpload.filename ?? null,
+                  },
+                });
+
+                return <Image url={url} mime={fileUpload.mime_type} />;
+              }}
+            </For>
+          </div>
+        );
+      }
     }
 
-    if (indexes.length > 0) {
-      const pkCol = columns[pkIndex].name;
-      const pkVal = context.row.original[pkIndex];
-      return (
-        <div class="flex gap-2">
-          <For each={indexes}>
-            {(index: number) => {
-              const fileUpload = fileUploads[index];
-              const url = imageUrl({
-                tableName,
-                query: {
-                  pk_column: pkCol,
-                  pk_value: pkVal,
-                  file_column_name: cell.col.name,
-                  file_name: fileUpload.filename ?? null,
-                },
-              });
-
-              return <Image url={url} mime={fileUpload.mime_type} />;
-            }}
-          </For>
-        </div>
-      );
-    }
+    return value.Text;
   }
+
+  throw Error("Unhandled value type");
 }
 
 function Image(props: { url: string; mime: string }) {
@@ -543,7 +549,7 @@ function buildColumnDefs(
           isFiles: isFiles && tableType !== "view",
         }),
       accessorFn: (row: RowData) => row[idx],
-    };
+    } as ColumnDef<RowData, SqlValue>;
   });
 }
 
@@ -605,7 +611,7 @@ function RowDataTable(props: {
                 <DataTable
                   // NOTE: The formatting is done via the columnsDefs.
                   columns={() => props.state.columnDefs}
-                  data={() => props.state.response.rows2}
+                  data={() => props.state.response.rows}
                   rowCount={totalRowCount()}
                   pagination={props.pagination[0]()}
                   onPaginationChange={(

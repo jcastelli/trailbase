@@ -244,9 +244,9 @@ mod tests {
     .await
     .unwrap();
 
-    assert_eq!(listing.rows2.len(), 1, "Listing: {listing:?}");
+    assert_eq!(listing.rows.len(), 1, "Listing: {listing:?}");
     assert_eq!(
-      listing.rows2[0][1],
+      listing.rows[0][1],
       SqlValue::Text(updated_value.to_string())
     );
 

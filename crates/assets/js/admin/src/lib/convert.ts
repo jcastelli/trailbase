@@ -17,8 +17,9 @@ import type { SqlValue } from "@/lib/value";
 import type { ColumnDataType } from "@bindings/ColumnDataType";
 import type { Table } from "@bindings/Table";
 
-/// A record, i.e. row of SQL values (including "Null") or undefined (i.e. don't submit), keyed by column name.
-/// We use a map-like structure to allow for absence and avoid schema complexities and skew.
+/// A record, i.e. row of SQL values (including "Null") or undefined (i.e.
+/// don't submit), keyed by column name. We use a map-like structure to allow
+/// for absence and avoid schema complexities and skew.
 export type Record = { [key: string]: SqlValue | undefined };
 
 // An array representation of a single row.
@@ -33,6 +34,18 @@ export function castToInteger(value: SqlValue): bigint {
 
 export function hashSqlValue(value: SqlValue): string {
   return `__${JSON.stringify(value)}`;
+}
+
+export function shallowCopySqlValue(
+  value: SqlValue | undefined,
+): SqlValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "Null") {
+    return "Null";
+  }
+  return { ...value };
 }
 
 export function literalDefault(

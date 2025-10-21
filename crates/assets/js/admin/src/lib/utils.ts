@@ -29,6 +29,10 @@ export function tryParseInt(value: string): number | undefined {
 }
 
 export function tryParseBigInt(value: string): bigint | undefined {
+  if (value === "") {
+    return undefined;
+  }
+
   try {
     return BigInt(value.trim());
   } catch {

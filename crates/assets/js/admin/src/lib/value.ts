@@ -11,6 +11,12 @@ export type SqlRealValue = { Real: number };
 export type SqlTextValue = { Text: string };
 export type SqlBlobValue = { Blob: Blob };
 
+export type SqlNotNullValue =
+  | SqlIntegerValue
+  | SqlRealValue
+  | SqlTextValue
+  | SqlBlobValue;
+
 export function assert<_T extends never>() {}
 type TypeEqualityGuard<A, B> = Exclude<A, B> | Exclude<B, A>;
 
@@ -21,9 +27,15 @@ assert<
     SqlNullValue | SqlIntegerValue | SqlRealValue | SqlTextValue | SqlBlobValue
   >
 >(); // no error
+assert<
+  TypeEqualityGuard<
+    SqlNotNullValue,
+    SqlIntegerValue | SqlRealValue | SqlTextValue | SqlBlobValue
+  >
+>(); // no error
 
 export function sqlValueToString(value: SqlValue): string {
-  if (value === null || value === "Null") {
+  if (value === "Null") {
     return "NULL";
   }
 
@@ -44,4 +56,32 @@ export function sqlValueToString(value: SqlValue): string {
   }
 
   return value.Text;
+}
+
+export function getReal(value: SqlValue | undefined): number | undefined {
+  if (value !== undefined && value !== "Null" && "Real" in value) {
+    return value.Real;
+  }
+}
+
+export function getInteger(value: SqlValue | undefined): bigint | undefined {
+  if (value !== undefined && value !== "Null" && "Integer" in value) {
+    return value.Integer;
+  }
+}
+
+export function getText(value: SqlValue | undefined): string | undefined {
+  if (value !== undefined && value !== "Null" && "Text" in value) {
+    return value.Text;
+  }
+}
+
+export function getBlob(value: SqlValue | undefined): string | undefined {
+  if (value !== undefined && value !== "Null" && "Blob" in value) {
+    const blob = value.Blob;
+    if ("Base64UrlSafe" in blob) {
+      return blob.Base64UrlSafe;
+    }
+    throw Error("Expected Base64UrlSafe");
+  }
 }
