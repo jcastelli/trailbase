@@ -1,9 +1,15 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.89-slim AS chef
+FROM rust:1.90-slim-bookworm AS chef
 
-# Install additional build dependencies. git is needed to bake version metadata.
+# Install additional build dependencies. Note that `git` is needed to bake version metadata.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl git libssl-dev pkg-config libclang-dev protobuf-compiler libprotobuf-dev libsqlite3-dev
+    curl git make pkg-config clang-19 libclang-19-dev protobuf-compiler libprotobuf-dev libssl-dev libsqlite3-dev musl-tools
 
+# Install Rust MUSL targets and chef.
+RUN rustup target add x86_64-unknown-linux-musl
+RUN rustup target add aarch64-unknown-linux-musl
+RUN cargo install cargo-chef
+
+# Install Node.js
 ENV PATH=/usr/local/node/bin:$PATH
 ARG NODE_VERSION=22.13.1
 
@@ -14,16 +20,16 @@ RUN curl -sL https://github.com/nodenv/node-build/archive/master.tar.gz | tar xz
 RUN npm install -g pnpm
 RUN pnpm --version
 
-FROM chef AS planner
 WORKDIR /app
+
+FROM chef AS planner
 COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
+RUN cargo chef prepare --bin trail --recipe-path recipe.json
 
 
-FROM planner AS builder
-# Re-build dependencies in case they have changed.
+FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --target=x86_64-unknown-linux-musl --features=vendor-ssl --release --bin trail --recipe-path recipe.json
 
 COPY . .
 
@@ -35,13 +41,13 @@ RUN pnpm -r install --frozen-lockfile
 ARG TARGETPLATFORM
 
 RUN case ${TARGETPLATFORM} in \
-         "linux/arm64")  RUST_TARGET="aarch64-unknown-linux-gnu"  ;; \
-         *)              RUST_TARGET="x86_64-unknown-linux-gnu"   ;; \
+         "linux/arm64")  RUST_TARGET="aarch64-unknown-linux-musl"  ;; \
+         *)              RUST_TARGET="x86_64-unknown-linux-musl"   ;; \
     esac && \
-    RUSTFLAGS="-C target-feature=+crt-static" PNPM_OFFLINE="TRUE" cargo build --target ${RUST_TARGET} --release --bin trail && \
+    PNPM_OFFLINE="TRUE" cargo build --target ${RUST_TARGET} --features=vendor-ssl --release --bin trail && \
     mv target/${RUST_TARGET}/release/trail /app/trail.exe
 
-FROM alpine:3.20 AS runtime
+FROM alpine:3.22 AS runtime
 RUN apk add --no-cache tini curl
 
 COPY --from=builder /app/trail.exe /app/trail
