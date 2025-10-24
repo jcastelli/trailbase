@@ -340,7 +340,10 @@ export function LogsPage() {
 function changeDistantPointLineColorToTransparent(
   ctx: ScriptableLineSegmentContext,
 ) {
-  const secondsApart = Math.abs(ctx.p0.parsed.x - ctx.p1.parsed.x) / 1000;
+  const x0 = ctx.p0.parsed.x ?? 0;
+  const x1 = ctx.p1.parsed.x ?? 0;
+
+  const secondsApart = Math.abs(x0 - x1) / 1000;
   if (secondsApart > 1200) {
     return "transparent";
   }
@@ -581,12 +584,15 @@ function LogsChart(props: { stats: Stats }) {
               callbacks: {
                 title: (items: TooltipItem<"scatter">[]) => {
                   return items.map((item) => {
-                    const ts = new Date(item.parsed.x);
-                    return ts.toUTCString();
+                    const ts = item.parsed.x;
+                    if (ts === null) {
+                      return "";
+                    }
+                    return new Date(ts).toUTCString();
                   });
                 },
                 label: (item: TooltipItem<"scatter">) => {
-                  return `rate: ${item.parsed.y.toPrecision(2)}/s`;
+                  return `rate: ${(item.parsed.y ?? 0).toPrecision(2)}/s`;
                 },
               },
             },
